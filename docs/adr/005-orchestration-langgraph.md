@@ -6,37 +6,47 @@ Accepted
 
 ## Context
 
-Линейные скрипты **не принимаются**. Нужен stateful pipeline: guardrails → retrieve → graph expand → RBAC → rerank → generate → output guardrails с возможностью ветвления (blocked / ok).
+Служба безопасности банка требует аудируемости каждого шага обработки запроса: система должна фиксировать, через какие этапы прошёл запрос, где была применена фильтрация RBAC и где сработали guardrails. Линейный скрипт не обеспечивает ни явного состояния, ни структурированного аудитного следа, ни управляемого ветвления (blocked / ok).
+
+Требования к оркестратору:
+- явный `State` — текущий контекст обработки запроса;
+- ветвление: guardrails → blocked (отказ) или ok (продолжение);
+- возможность воспроизвести последовательность шагов по `trace_id`;
+- тестируемость каждого узла в изоляции.
 
 ## Alternatives
 
 ### 1. Линейный Python-скрипт
 
-- Плюсы: минимум зависимостей
-- Минусы: не сдаётся; нет явного state
+- Плюсы: минимум зависимостей, прост в понимании
+- Минусы: нет явного состояния; невозможен аудит шагов, требуемый СБ; нет управляемого ветвления; сложно тестировать отдельные этапы
 
 ### 2. LangGraph
 
-- Плюсы: state machine, checkpointing, экосистема LangChain; соответствует курсу
-- Минусы: learning curve; версионность API
+- Плюсы: state machine с явным `State`; checkpointing; узлы независимо тестируемы; sequence diagram 1:1 с кодом
+- Минусы: зависимость от releases LangGraph; learning curve для команды
 
 ### 3. LlamaIndex Workflows / custom asyncio FSM
 
-- Плюсы: гибкость
-- Минусы: больше boilerplate; слабее alignment с рекомендацией курса
+- Плюсы: независимость от LangGraph-экосистемы
+- Минусы: значительно больше boilerplate; нет готового checkpointing; сложнее onboarding новых разработчиков
 
 ## Decision
 
-Использовать **LangGraph** с явным `State` и узлами: `input_guardrails`, `classify_intent`, `vector_retrieve`, `graph_expand`, `rbac_filter`, `rerank`, `generate_answer`, `output_guardrails`.
+Использовать **LangGraph** с явным `State` и следующими узлами:
+
+`input_guardrails` → `classify_intent` → `vector_retrieve` → `graph_expand` → `rbac_filter` → `rerank` → `generate_answer` → `output_guardrails`
+
+Каждый узел логирует свой результат с `trace_id`. Ветвление реализовано через conditional edges LangGraph.
 
 ## Consequences
 
-**Плюсы:** sequence diagram 1:1 с кодом; тестируемые узлы.
+**Плюсы:** аудитный след удовлетворяет требованиям СБ; sequence diagram читается прямо из кода; узлы покрываются unit-тестами; checkpointing позволяет воспроизвести запрос по `trace_id`.
 
-**Минусы:** зависимость от LangGraph releases.
+**Минусы:** зависимость от конкретного релиза LangGraph; потребует актуализации при обновлениях API.
 
-**Риски:** сложный debug — mitigated trace_id и последующим OTel (MVP).
+**Риски:** сложный debug при ошибках в middle-узлах — снижается `trace_id` в JSON-логах и последующим OTel в MVP.
 
 ## Compliance & Security
 
-Узел `rbac_filter` обязателен в графе, не «опциональный middleware».
+Узел `rbac_filter` — обязательный элемент графа, не опциональный middleware. Его отсутствие или bypass делают систему несоответствующей требованиям ИБ.

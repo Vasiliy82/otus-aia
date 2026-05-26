@@ -1,39 +1,24 @@
-# Требования к сдаче (выжимка)
+# Требования к системе
 
-Полный текст: методичка в `local-docs/32-33. Методические указания...` (локально).
+Полный чеклист приёмки PoC — в [acceptance-criteria.md](acceptance-criteria.md).
 
-## Три артефакта
+## Нефункциональные требования (зафиксированы Службой ИБ и ЦБ РФ)
 
-1. **Git monorepo** — `infra/`, `backend/`, `docs/`
-2. **Architecture Design Document** — диаграммы C4, Deployment, Sequence, ER, capacity planning
-3. **Deep-Dive Demo** — видео 5–7 мин, трейсы, визуализация графа, нагрузочный отчёт
+- On-prem / закрытый контур — без облачных AI API.
+- GraphRAG: не только векторный поиск, но и расширение по графу знаний (требование Дирекции ИТ, ADR-002).
+- LangGraph / state machine — оркестратор с явным состоянием и аудитом шагов.
+- RBAC на уровне фрагментов — пользователь без прав не получает закрытый контент.
 
-## Критично для зачёта
+## Архитектурные артефакты для GO-решения
 
-- [ ] On-prem / без облачных API
-- [ ] GraphRAG (не только vector search)
-- [ ] LangGraph или state machine
-- [ ] RBAC на чанках работает
-- [ ] Deployment Diagram и Data Flow
-- [ ] Control Plane / Data Plane разделены в архитектуре MVP
+- Deployment Diagram и Data Flow.
+- C4 Level 1–2.
+- Sequence Diagram полного запроса.
+- ER-диаграмма.
+- Разделение Control Plane / Data Plane в архитектуре MVP.
 
-## ADR (минимум)
+## Минимальный набор ADR
 
-- [x] ADR-000 kickoff
-- [x] ADR-001 … ADR-007 (домен, GraphRAG, LLM, Qdrant, LangGraph, RBAC, моки)
-- [ ] ADR LLM Serving, Graph DB — при переходе к backend/MVP
-
-## PoC implementation (текущий шаг)
-
-- [x] Monorepo scaffold
-- [x] Data prep: `make data-all`
-- [ ] LangGraph pipeline
-- [ ] FastAPI `/ask`
-- [ ] Qdrant embeddings load
-- [ ] Guardrails + pytest
-
-## Диаграммы (следующие шаги)
-
-- [ ] C4 L1–L2 PoC
-- [ ] Sequence: User → Guardrails → GraphRAG → LLM
-- [ ] ER (согласована с `infra/sql/`)
+- [x] ADR-000 … ADR-007 (домен, GraphRAG, LLM, векторный поиск, LangGraph, RBAC, моки)
+- [ ] ADR: LLM Serving (vLLM / SGLang) — при переходе к MVP
+- [ ] ADR: Graph DB (Neo4j) — при переходе к MVP
