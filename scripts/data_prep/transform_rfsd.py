@@ -96,8 +96,11 @@ def filter_reports_two_years(financial_reports: pl.DataFrame) -> pl.DataFrame:
         .filter(pl.col("years_count") == len(REQUIRED_YEARS))
         .select("inn")
     )
-    return financial_reports.join(companies_with_required_years, on="inn", how="inner")
-
+    return (
+        financial_reports
+        .join(companies_with_required_years, on="inn", how="inner")
+        .filter(pl.col("year").is_in(REQUIRED_YEARS))
+    )
 
 def build_company_dim(reports_2y: pl.DataFrame) -> pl.DataFrame:
     return (

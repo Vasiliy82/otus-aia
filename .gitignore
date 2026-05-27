@@ -11,6 +11,7 @@ __pycache__/
 .ruff_cache/
 
 data/raw/
+data/poc/
 data/processed/
 
 *.egg-info/
