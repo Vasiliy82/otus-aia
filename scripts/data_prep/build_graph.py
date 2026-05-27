@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 
 import polars as pl
 
 from scripts.data_prep.seed_legal import LegalSeed
+from scripts.data_prep.serde import loads_metadata
 
 
 @dataclass(frozen=True)
@@ -58,7 +58,7 @@ def build_graph_seed(
                 "label": chunk["external_id"],
                 "ref_table": "chunk",
                 "ref_id": chunk["external_id"],
-                "metadata": chunk["metadata"],
+                "metadata": loads_metadata(chunk["metadata"]),
             }
         )
 
@@ -72,9 +72,6 @@ def build_graph_seed(
             "metadata": {},
         }
     )
-
-    for row in nodes_rows:
-        row["metadata"] = json.dumps(row["metadata"], ensure_ascii=False)
 
     nodes = pl.DataFrame(nodes_rows)
 
@@ -134,9 +131,6 @@ def build_graph_seed(
             "metadata": {},
         },
     ]
-
-    for row in edges_rows:
-        row["metadata"] = json.dumps(row["metadata"], ensure_ascii=False)
 
     edges = pl.DataFrame(edges_rows)
 

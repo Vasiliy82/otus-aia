@@ -5,6 +5,7 @@ import polars as pl
 from scripts.data_prep.build_graph import GraphSeed
 from scripts.data_prep.config import REQUIRED_YEARS, TARGET_YEAR
 from scripts.data_prep.seed_legal import LegalSeed
+from scripts.data_prep.serde import loads_allowed_roles
 
 
 class DataValidationError(Exception):
@@ -42,8 +43,8 @@ def validate_legal_seed(legal: LegalSeed) -> None:
     if secret_chunks.height != 1:
         raise DataValidationError("Expected exactly one ch_003 chunk")
 
-    roles = secret_chunks["allowed_roles"].to_list()[0]
-    if "risk_manager" not in roles or "analyst" in roles:
+    roles = loads_allowed_roles(secret_chunks["allowed_roles"].to_list()[0])
+    if roles != ["risk_manager"]:
         raise DataValidationError("ch_003 must be accessible only to risk_manager")
 
 

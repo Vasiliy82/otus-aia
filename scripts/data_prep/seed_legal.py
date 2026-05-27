@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import polars as pl
-import json
 
 
 @dataclass(frozen=True)
@@ -25,9 +24,9 @@ def build_legal_seed(demo_inn: str, demo_company_name: str = "ООО Ромаш�
             ],
             "security_level": ["public", "internal", "secret"],
             "metadata": [
-                json.dumps({"demo_company_inn": demo_inn, "demo_company_name": demo_company_name}, ensure_ascii=False),
-                json.dumps({"demo_company_inn": demo_inn}, ensure_ascii=False),
-                json.dumps({"demo_company_inn": demo_inn}, ensure_ascii=False),
+                {"demo_company_inn": demo_inn, "demo_company_name": demo_company_name},
+                {"demo_company_inn": demo_inn},
+                {"demo_company_inn": demo_inn},
             ],
         }
     )
@@ -43,14 +42,14 @@ def build_legal_seed(demo_inn: str, demo_company_name: str = "ООО Ромаш�
             ],
             "chunk_order": [1, 1, 1],
             "allowed_roles": [
-                json.dumps(["analyst", "risk_manager"], ensure_ascii=False),
-                json.dumps(["analyst", "risk_manager"], ensure_ascii=False),
-                json.dumps(["risk_manager"], ensure_ascii=False),
+                ["analyst", "risk_manager"],
+                ["analyst", "risk_manager"],
+                ["risk_manager"],
             ],
             "metadata": [
-                json.dumps({"linked_inn": demo_inn}, ensure_ascii=False),
-                json.dumps({"linked_inn": demo_inn, "risk_factor": "revenue_drop"}, ensure_ascii=False),
-                json.dumps({"linked_inn": demo_inn}, ensure_ascii=False),
+                {"linked_inn": demo_inn},
+                {"linked_inn": demo_inn, "risk_factor": "revenue_drop"},
+                {"linked_inn": demo_inn},
             ],
         }
     )

@@ -11,6 +11,7 @@ from psycopg.rows import dict_row
 from scripts.data_prep.build_graph import GraphSeed
 from scripts.data_prep.config import DATABASE_URL, RISK_COLUMNS
 from scripts.data_prep.seed_legal import LegalSeed
+from scripts.data_prep.serde import dumps_json, loads_allowed_roles, loads_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -164,9 +165,7 @@ def load_poc_to_postgres(
 
             external_doc_to_id: dict[str, int] = {}
             for row in legal.documents.iter_rows(named=True):
-                metadata = row.get("metadata") or {}
-                if isinstance(metadata, str):
-                    metadata = json.loads(metadata)
+                metadata = loads_metadata(row.get("metadata"))
                 cur.execute(
                     """
                     INSERT INTO document (source, doc_type, title, security_level, metadata)
@@ -185,13 +184,9 @@ def load_poc_to_postgres(
 
             external_chunk_to_id: dict[str, int] = {}
             for row in legal.chunks.iter_rows(named=True):
-                metadata = row.get("metadata") or {}
-                if isinstance(metadata, str):
-                    metadata = json.loads(metadata)
+                metadata = loads_metadata(row.get("metadata"))
                 doc_id = external_doc_to_id[row["document_external_id"]]
-                allowed_roles = row["allowed_roles"]
-                if isinstance(allowed_roles, str):
-                    allowed_roles = json.loads(allowed_roles)
+                allowed_roles = loads_allowed_roles(row["allowed_roles"])
                 cur.execute(
                     """
                     INSERT INTO chunk (
@@ -211,9 +206,7 @@ def load_poc_to_postgres(
                 external_chunk_to_id[row["external_id"]] = cur.fetchone()["chunk_id"]
 
             for row in graph.nodes.iter_rows(named=True):
-                metadata = row.get("metadata") or "{}"
-                if isinstance(metadata, dict):
-                    metadata = json.dumps(metadata)
+                metadata = dumps_json(loads_metadata(row.get("metadata"))) or "{}"
                 cur.execute(
                     """
                     INSERT INTO graph_node (node_id, node_type, label, ref_table, ref_id, metadata)
@@ -233,9 +226,7 @@ def load_poc_to_postgres(
                 )
 
             for row in graph.edges.iter_rows(named=True):
-                metadata = row.get("metadata") or "{}"
-                if isinstance(metadata, dict):
-                    metadata = json.dumps(metadata)
+                metadata = dumps_json(loads_metadata(row.get("metadata"))) or "{}"
                 source_chunk_id = None
                 ext = row.get("source_chunk_external_id")
                 if ext:

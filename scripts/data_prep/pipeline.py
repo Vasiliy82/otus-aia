@@ -11,6 +11,7 @@ from scripts.data_prep.build_graph import GraphSeed, build_graph_seed
 from scripts.data_prep.config import POC_DIR, PROCESSED_DIR, RAW_RFSD_DIR, YearPaths, ensure_data_dirs
 from scripts.data_prep.download_rfsd import download_all_years
 from scripts.data_prep.seed_legal import LegalSeed, build_legal_seed
+from scripts.data_prep.serde import dataframe_for_csv_export
 from scripts.data_prep.transform_rfsd import transform_rfsd
 
 logger = logging.getLogger(__name__)
@@ -55,10 +56,10 @@ def export_artifacts(dataset: PreparedDataset, output_dir: Path | None = None) -
     dataset.poc_company.write_csv(output_dir / "poc_company.csv")
     dataset.poc_financial_report.write_csv(output_dir / "poc_financial_report.csv")
     dataset.poc_company_features.write_csv(output_dir / "poc_company_features.csv")
-    dataset.legal.documents.write_csv(output_dir / "documents.csv")
-    dataset.legal.chunks.write_csv(output_dir / "chunks.csv")
-    dataset.graph.nodes.write_csv(output_dir / "graph_nodes.csv")
-    dataset.graph.edges.write_csv(output_dir / "graph_edges.csv")
+    dataframe_for_csv_export(dataset.legal.documents).write_csv(output_dir / "documents.csv")
+    dataframe_for_csv_export(dataset.legal.chunks).write_csv(output_dir / "chunks.csv")
+    dataframe_for_csv_export(dataset.graph.nodes).write_csv(output_dir / "graph_nodes.csv")
+    dataframe_for_csv_export(dataset.graph.edges).write_csv(output_dir / "graph_edges.csv")
 
     manifest = {
         "demo_inn": dataset.demo_inn,
