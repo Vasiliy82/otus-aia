@@ -1,0 +1,145 @@
+model {
+
+  creditAnalyst = actor 'Кредитный аналитик' {
+    description 'Сотрудник банка, анализирует кредитные риски компаний'
+    -> aiAssistant             'использует систему'
+    -> aiAssistant.fastapi     'POST /ask · GET /health'
+    -> aiAssistant.fastapi.apiLayer 'POST /ask {query, role}'
+  }
+
+  docStorage = external-system 'Хранилище документов' {
+    description '
+      Синтетический корпус РФСД (Hugging Face).
+      В MVP — реальная нормативная база банка.
+    '
+  }
+
+  aiAssistant = system 'AI-ассистент кредитного аналитика' {
+    description '
+      On-prem Secure GraphRAG система для банка.
+      LangGraph + pgvector + chunk-level RBAC + MockLLM.
+    '
+
+    fastapi = container 'FastAPI Backend' {
+      technology 'Python 3.11, FastAPI, uvicorn'
+      description 'REST API + LangGraph workflow оркестратор запросов аналитика'
+      icon tech:python
+
+      apiLayer = component 'API Layer' {
+        technology 'FastAPI'
+        description '
+          POST /ask — принимает {query, role},
+          возвращает {answer, citations, trace_id, blocked}.
+          GET /health.
+        '
+        -> langGraph 'invoke(state)'
+      }
+
+      langGraph = component 'LangGraph Workflow' {
+        technology 'LangGraph'
+        description '
+          StateGraph оркестратор:
+          input_guardrails → vector_retrieve → graph_expand
+          → rbac_filter → rerank → generate_answer → output_guardrails.
+          Каждый узел логирует trace_id.
+        '
+        -> guardrails 'проверка входа / выхода'
+        -> retrieval  'vector_retrieve + graph_expand'
+        -> rbac       'rbac_filter по role'
+        -> reranker   'rerank chunks'
+        -> mockLlm    'generate_answer'
+      }
+
+      guardrails = component 'Guardrails' {
+        technology 'Python regexp + rules'
+        description '
+          Input: блокирует prompt injection и стоп-паттерны.
+          Output: блокирует ответы без citations.
+        '
+      }
+
+      retrieval = component 'Retrieval' {
+        technology 'pgvector cosine, BFS graph expansion'
+        description '
+          Векторный поиск top-k →
+          BFS 1-hop по graph_edge (BELONGS_TO, MENTIONS, LINKED_TO) →
+          расширенный контекст чанков.
+        '
+        -> embeddings        'encode query'
+        -> aiAssistant.postgres 'cosine search · BFS по graph_edge'
+      }
+
+      rbac = component 'RBAC Filter' {
+        technology 'PostgreSQL array check'
+        description '
+          Фильтрует chunks: allowed_roles @> ARRAY[role].
+          ch_003 доступен только role=risk_manager.
+          ADR-006.
+        '
+        -> aiAssistant.postgres 'check allowed_roles'
+      }
+
+      reranker = component 'Reranker' {
+        technology 'Python'
+        description '
+          Детерминированный rerrank:
+          weight × confidence + vector_score.
+          ADR-007.
+        '
+      }
+
+      mockLlm = component 'MockLLM Client' {
+        technology 'Python'
+        description '
+          Заглушка LLM без внешних API.
+          Шаблонный ответ + перечень citations из контекста.
+          ADR-003, ADR-007.
+        '
+      }
+
+      embeddings = component 'Embeddings' {
+        technology 'sentence-transformers CPU'
+        description '
+          paraphrase-multilingual-MiniLM-L12-v2, dim=384.
+          Кодирует запрос (runtime) и chunks (make embed-chunks).
+        '
+      }
+
+      indexing = component 'Indexing CLI' {
+        technology 'Python CLI'
+        description '
+          make embed-chunks: читает chunks из PG,
+          вычисляет эмбеддинги, upsert в chunk_embedding.
+          Запускается разово после data-all.
+        '
+        -> embeddings           'encode chunks'
+        -> aiAssistant.postgres 'upsert chunk_embedding'
+      }
+    }
+
+    postgres = database 'PostgreSQL + pgvector' {
+      technology 'PostgreSQL 18, pgvector ext'
+      description '
+        Единое хранилище:
+        граф (chunk, document, company, risk, law, graph_edge),
+        векторный индекс HNSW (cosine, dim=384),
+        RBAC-метаданные (allowed_roles).
+        infra/sql/001-004.
+      '
+      icon tech:postgresql
+    }
+
+    etlPipeline = container 'ETL Pipeline' {
+      technology 'Python (scripts/data_prep/)'
+      description '
+        make data-all:
+        скачать РФСД (HuggingFace),
+        трансформировать, seed граф/RBAC, загрузить в PG.
+      '
+      -> postgres    'load chunks · граф · RBAC'
+      -> docStorage  'download РФСД dataset'
+    }
+
+  }
+
+}

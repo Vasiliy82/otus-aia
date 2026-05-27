@@ -1,0 +1,124 @@
+views {
+
+  // ─── Стартовая страница ──────────────────────────────────────────────────
+
+  view index {
+    title 'MVP: AI-ассистент кредитного аналитика'
+    description '
+      Целевая Production архитектура MVP.
+      Self-hosted Qwen + Neo4j + Qdrant + HashiCorp Vault + OTel.
+      Q1-Q3 2027. Зависит от GO-решения ТехКома по PoC.
+    '
+    include *
+    style aiAssistant {
+      size large
+    }
+  }
+
+  // ─── L1: System Context ──────────────────────────────────────────────────
+
+  view mvp_context of aiAssistant {
+    title 'MVP: L1 — System Context'
+    description '
+      Контекст системы: аналитик, комплаенс,
+      нормативная база банка.
+    '
+    include
+      *,
+      creditAnalyst,
+      complianceOfficer,
+      legalCorpus
+  }
+
+  // ─── L2: Containers ──────────────────────────────────────────────────────
+
+  view mvp_container of aiAssistant {
+    title 'MVP: L2 — Containers'
+    description '
+      Контейнеры MVP:
+      FastAPI Backend, vLLM (Qwen), Neo4j, Qdrant, PostgreSQL,
+      HashiCorp Vault, MinIO, Observability, ETL Pipeline.
+    '
+    include
+      *,
+      creditAnalyst,
+      complianceOfficer,
+      legalCorpus
+
+    style aiAssistant {
+      opacity 0%
+    }
+    style creditAnalyst, complianceOfficer {
+      size sm
+    }
+    style legalCorpus {
+      size sm
+    }
+  }
+
+  // ─── L3: Backend Components ──────────────────────────────────────────────
+
+  view mvp_component of aiAssistant.apiGateway {
+    title 'MVP: L3 — Backend Components'
+    description '
+      Компоненты FastAPI backend MVP:
+      LangGraph workflow, hybrid retrieval (Qdrant + Neo4j),
+      RBAC + OPA, CrossEncoder rerank, LLM Client, Indexing CLI.
+    '
+    include
+      *,
+      aiAssistant.qdrant,
+      aiAssistant.neo4j,
+      aiAssistant.postgres,
+      aiAssistant.vllm,
+      creditAnalyst
+
+    style aiAssistant.apiGateway {
+      opacity 0%
+    }
+    style creditAnalyst {
+      size sm
+    }
+    style aiAssistant.qdrant, aiAssistant.neo4j, aiAssistant.postgres, aiAssistant.vllm {
+      size sm
+    }
+  }
+
+  // ─── L2: Observability ───────────────────────────────────────────────────
+
+  view mvp_observability {
+    title 'MVP: Observability Stack'
+    description '
+      Observability: OTel Collector → Jaeger (traces) + Prometheus/Grafana (metrics).
+      Мониторинг latency, throughput, GPU utilization, error rate.
+    '
+    include
+      aiAssistant.otelCollector,
+      aiAssistant.jaeger,
+      aiAssistant.prometheus,
+      aiAssistant.apiGateway,
+      aiAssistant.vllm
+  }
+
+  // ─── Deployment Zones ────────────────────────────────────────────────────
+
+  view mvp_deployment {
+    title 'MVP: Deployment Zones'
+    description '
+      Зоны развёртывания:
+      DMZ (API Gateway) → Control Plane (Backend, Vault) →
+      Data Plane (Neo4j, Qdrant, PostgreSQL, MinIO) →
+      GPU Zone (vLLM/Qwen) →
+      Observability (OTel, Jaeger, Prometheus).
+    '
+    include
+      creditAnalyst,
+      complianceOfficer,
+      aiAssistant.*
+
+    style aiAssistant {
+      opacity 0%
+    }
+  }
+
+}

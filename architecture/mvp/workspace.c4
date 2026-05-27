@@ -1,0 +1,57 @@
+specification {
+
+  element actor {
+    notation "Person"
+    style {
+      shape person
+      color green
+    }
+  }
+
+  element system {
+    notation "Software System"
+    style {
+      opacity 20%
+    }
+  }
+
+  element external-system {
+    notation "External Software System"
+    style {
+      opacity 20%
+      color muted
+    }
+  }
+
+  element container {
+    notation "Container"
+  }
+
+  element database {
+    notation "Database"
+    style {
+      shape cylinder
+      color sky
+    }
+  }
+
+  element queue {
+    notation "Message Queue"
+    style {
+      shape queue
+      color amber
+    }
+  }
+
+  element component {
+    notation "Component"
+    style {
+      opacity 20%
+    }
+  }
+
+  relationship async {
+    line dashed
+  }
+
+}

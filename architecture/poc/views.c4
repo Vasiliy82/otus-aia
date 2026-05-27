@@ -1,0 +1,80 @@
+views {
+
+  // ─── Стартовая страница ──────────────────────────────────────────────────
+
+  view index {
+    title 'PoC: AI-ассистент кредитного аналитика'
+    description '
+      Secure GraphRAG On-Prem PoC для банка.
+      LangGraph + FastAPI + PostgreSQL/pgvector + MockLLM.
+    '
+    include *
+    style aiAssistant {
+      size large
+    }
+  }
+
+  // ─── L1: System Context ──────────────────────────────────────────────────
+
+  view poc_context of aiAssistant {
+    title 'PoC: L1 — System Context'
+    description '
+      Контекст системы: кто использует AI-ассистент
+      и с какими внешними системами он взаимодействует.
+    '
+    include
+      *,
+      creditAnalyst,
+      docStorage
+  }
+
+  // ─── L2: Containers ──────────────────────────────────────────────────────
+
+  view poc_container of aiAssistant {
+    title 'PoC: L2 — Containers'
+    description '
+      Контейнеры внутри AI-ассистента:
+      FastAPI backend, PostgreSQL+pgvector, ETL pipeline.
+    '
+    include
+      *,
+      creditAnalyst,
+      docStorage
+
+    style aiAssistant {
+      opacity 0%
+    }
+    style creditAnalyst {
+      size sm
+    }
+    style docStorage {
+      size sm
+    }
+  }
+
+  // ─── L3: Backend Components ──────────────────────────────────────────────
+
+  view poc_component of aiAssistant.fastapi {
+    title 'PoC: L3 — Backend Components'
+    description '
+      Компоненты FastAPI backend:
+      LangGraph workflow, retrieval, RBAC, guardrails,
+      embeddings, Reranker, MockLLM, Indexing CLI.
+    '
+    include
+      *,
+      aiAssistant.postgres,
+      creditAnalyst
+
+    style aiAssistant.fastapi {
+      opacity 0%
+    }
+    style creditAnalyst {
+      size sm
+    }
+    style aiAssistant.postgres {
+      size sm
+    }
+  }
+
+}

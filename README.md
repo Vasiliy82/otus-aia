@@ -52,10 +52,31 @@ make test-backend
 RUN_INTEGRATION=1 make test-backend
 ```
 
+## Архитектурные диаграммы (LikeC4)
+
+Исходники: `architecture/poc/` (реализованный PoC), `architecture/mvp/` (целевая архитектура).
+
+Первый запуск — собрать кастомный образ (в нём доустановлен Playwright для экспорта PNG):
+
+```bash
+make arch-build
+make arch-poc-export    # → docs/diagrams/poc/*.png
+make arch-poc-site      # → dist/arch/poc/index.html
+make arch-all           # PoC + MVP (сайт и PNG)
+```
+
+Интерактивный просмотр при правке `.c4` файлов:
+
+```bash
+make arch-dev-poc       # http://localhost:5173
+make arch-dev-mvp       # http://localhost:5174
+```
+
 ## Структура репозитория
 
 ```
-infra/          Docker Compose (pgvector), SQL-схемы
+architecture/   LikeC4-модели PoC и MVP
+infra/          Docker Compose (pgvector, LikeC4), SQL-схемы
 scripts/        Пайплайн подготовки данных
 backend/        LangGraph, FastAPI, pgvector retrieval
 docs/           ADR, scope PoC, архитектурная документация
