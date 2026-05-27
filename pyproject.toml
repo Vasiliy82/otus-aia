@@ -20,10 +20,17 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+backend = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "langgraph>=0.2",
+    "sentence-transformers>=3.0",
+    "numpy>=1.26",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["scripts*"]
+include = ["scripts*", "backend*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

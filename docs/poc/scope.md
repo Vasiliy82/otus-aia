@@ -65,7 +65,15 @@
 - **Синтетический юридический срез**: 3 документа, 3 фрагмента, демонстрация RBAC на `ch_003`.
 - **Граф знаний**: узлы Document, Chunk, Company, LegalAct, RiskFactor; рёбра BELONGS_TO, MENTIONS, LINKED_TO.
 
-Подготовка: `make data-all` (см. [README.md](../../README.md)).
+Подготовка и демо API:
+
+```bash
+make data-all
+make embed-chunks
+make api
+```
+
+См. [README.md](../../README.md). Интеграционные тесты backend: `RUN_INTEGRATION=1 make test-backend`.
 
 ## Критические тесты
 

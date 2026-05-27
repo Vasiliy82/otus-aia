@@ -51,11 +51,12 @@
 - [x] Подготовка данных: `make data-all`
 - [x] ADR-000 … ADR-007
 - [x] Граф знаний: PostgreSQL `graph_node` / `graph_edge`
+- [x] LangGraph pipeline (`backend/graph/workflow.py`)
+- [x] FastAPI `POST /ask`, `GET /health`
+- [x] pgvector: миграция `004_embeddings.sql`, `make embed-chunks`
+- [x] Guardrails + pytest (`tests/backend/`)
 
 ### В работе
 
-- [ ] LangGraph pipeline
-- [ ] FastAPI `/ask`
-- [ ] pgvector — загрузка эмбеддингов
-- [ ] Guardrails + pytest
 - [ ] Диаграммы C4, Sequence, ER, Deployment
+- [ ] Интеграционные тесты на CI с `RUN_INTEGRATION=1`
