@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 
 from backend.config import API_HOST, API_PORT
@@ -21,6 +22,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
     parser = argparse.ArgumentParser(description="GraphRAG PoC backend CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 

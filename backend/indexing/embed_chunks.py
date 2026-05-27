@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def embed_all_chunks() -> int:
+    logger.info("Loading embedding model %s", EMBEDDING_MODEL)
     model = get_embedding_model()
     dim = model.dimension
     if dim != EMBEDDING_DIM:
@@ -35,6 +36,7 @@ def embed_all_chunks() -> int:
             logger.warning("No chunks found — run make data-load first")
             return 0
 
+        logger.info("Encoding %d chunk(s)", len(rows))
         texts = [r["chunk_text"] for r in rows]
         vectors = model.encode(texts)
 
