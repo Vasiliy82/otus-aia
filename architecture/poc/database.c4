@@ -1,0 +1,97 @@
+model {
+
+  extend aiAssistant.postgres {
+
+    company = pgTable 'company' {
+      description '
+        PK: company_id (SERIAL).
+        inn UNIQUE, ogrn, name, region, okved.
+        infra/sql/001_financial.sql
+      '
+    }
+
+    financial_report = pgTable 'financial_report' {
+      description '
+        PK: report_id. FK: company_id → company.
+        report_year, revenue, profit, assets.
+        UNIQUE (company_id, report_year).
+      '
+      -> company 'company_id'
+    }
+
+    financial_fact = pgTable 'financial_fact' {
+      description '
+        PK: fact_id. FK: company_id → company,
+        source_report_id → financial_report.
+        fact_type, report_year, value, unit.
+      '
+      -> company 'company_id'
+      -> financial_report 'source_report_id'
+    }
+
+    risk_factor = pgTable 'risk_factor' {
+      description '
+        PK: risk_factor_id. code UNIQUE.
+        title, description, severity.
+      '
+    }
+
+    company_risk = pgTable 'company_risk' {
+      description '
+        PK: company_risk_id.
+        FK: company_id, risk_factor_id, fact_id (optional).
+        confidence, explanation.
+      '
+      -> company 'company_id'
+      -> risk_factor 'risk_factor_id'
+      -> financial_fact 'fact_id'
+    }
+
+    document = pgTable 'document' {
+      description '
+        PK: document_id. source, doc_type, title,
+        security_level, metadata JSONB.
+        infra/sql/002_documents.sql
+      '
+    }
+
+    chunk = pgTable 'chunk' {
+      description '
+        PK: chunk_id. FK: document_id → document.
+        chunk_text, chunk_order, allowed_roles[].
+      '
+      -> document 'document_id'
+    }
+
+    graph_node = pgTable 'graph_node' {
+      description '
+        PK: node_id (TEXT). node_type, label.
+        ref_table, ref_id, metadata JSONB.
+        infra/sql/003_graph.sql
+      '
+    }
+
+    graph_edge = pgTable 'graph_edge' {
+      description '
+        PK: edge_id (SERIAL).
+        FK: source_node_id, target_node_id → graph_node.
+        edge_type, weight, confidence.
+        FK: source_chunk_id → chunk (optional).
+      '
+      -> graph_node 'source_node_id'
+      -> graph_node 'target_node_id'
+      -> chunk 'source_chunk_id'
+    }
+
+    chunk_embedding = pgTable 'chunk_embedding' {
+      description '
+        PK/FK: chunk_id → chunk ON DELETE CASCADE.
+        embedding vector(384), model_name.
+        HNSW index (cosine). infra/sql/004_embeddings.sql
+      '
+      -> chunk 'chunk_id'
+    }
+
+  }
+
+}

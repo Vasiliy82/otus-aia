@@ -7,6 +7,8 @@ views {
     description '
       Secure GraphRAG On-Prem PoC для банка.
       LangGraph + FastAPI + PostgreSQL/pgvector + MockLLM.
+
+      Дополнительно: poc_ask_sequence, poc_er, poc_deployment.
     '
     include *
     style aiAssistant {
@@ -74,6 +76,22 @@ views {
     }
     style aiAssistant.postgres {
       size sm
+    }
+  }
+
+  // ─── ER: PostgreSQL Schema ───────────────────────────────────────────────
+
+  view poc_er of aiAssistant.postgres {
+    title 'PoC: ER — PostgreSQL Schema'
+    description '
+      Логическая ER-модель, согласованная с infra/sql/001-004.
+      10 таблиц: domain (company, financial_*), documents (document, chunk),
+      graph (graph_node, graph_edge), vectors (chunk_embedding).
+    '
+    include *
+
+    style aiAssistant.postgres {
+      opacity 0%
     }
   }
 

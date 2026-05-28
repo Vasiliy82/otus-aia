@@ -50,6 +50,36 @@ specification {
     }
   }
 
+  element pgTable {
+    notation "PostgreSQL Table"
+    style {
+      shape storage
+      color sky
+    }
+  }
+
+  element datastoreEntity {
+    notation "Logical Entity"
+    style {
+      shape storage
+      color indigo
+    }
+  }
+
+  deploymentNode environment {
+    notation "Environment"
+    style {
+      opacity 15%
+    }
+  }
+
+  deploymentNode zone {
+    notation "Deployment Zone"
+    style {
+      opacity 10%
+    }
+  }
+
   relationship async {
     line dashed
   }

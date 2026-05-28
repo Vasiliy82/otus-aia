@@ -122,7 +122,7 @@ arch-poc-export:
 	  echo "likec4-dev-poc is not running. Start: make arch-dev-poc (or make arch-dev)"; exit 1; \
 	fi
 	$(COMPOSE_ARCH) exec -T likec4-dev-poc \
-	  likec4 export png --output assets \
+	  likec4 export png --output assets --sequence \
 	  --server-url http://127.0.0.1:5173/ --timeout 60
 
 arch-mvp-export:
@@ -130,7 +130,7 @@ arch-mvp-export:
 	  echo "likec4-dev-mvp is not running. Start: make arch-dev-mvp (or make arch-dev)"; exit 1; \
 	fi
 	$(COMPOSE_ARCH) exec -T likec4-dev-mvp \
-	  likec4 export png --output assets \
+	  likec4 export png --output assets --sequence \
 	  --server-url http://127.0.0.1:5173/ --timeout 60
 
 arch-export: arch-poc-export arch-mvp-export

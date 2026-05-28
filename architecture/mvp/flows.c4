@@ -1,0 +1,33 @@
+views {
+
+  dynamic view mvp_ask_sequence {
+    title 'MVP: Sequence — POST /ask'
+    description '
+      User → Guardrails → GraphRAG (Qdrant + Neo4j) → LLM (vLLM/Qwen).
+
+      Полный pipeline: input_guardrails → hybrid retrieval
+      → rbac_filter → cross-encoder rerank → generate_answer
+      → output_guardrails. Трассировка OTel.
+    '
+    variant sequence
+
+    creditAnalyst
+      -> aiAssistant.apiGateway.apiLayer 'POST /ask {query, role}'
+      -> aiAssistant.apiGateway.guardrails 'input guardrails'
+      -> aiAssistant.apiGateway.retrieval 'GraphRAG: Qdrant + Neo4j'
+      -> aiAssistant.apiGateway.llmClient 'generate_answer'
+      -> aiAssistant.vllm 'POST /v1/chat/completions'
+      -> aiAssistant.apiGateway.llmClient 'stream response'
+      -> aiAssistant.apiGateway.guardrails 'output guardrails'
+      -> creditAnalyst 'answer + citations'
+
+    include
+      creditAnalyst,
+      aiAssistant.apiGateway.apiLayer,
+      aiAssistant.apiGateway.guardrails,
+      aiAssistant.apiGateway.retrieval,
+      aiAssistant.apiGateway.llmClient,
+      aiAssistant.vllm
+  }
+
+}

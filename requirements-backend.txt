@@ -4,3 +4,4 @@ uvicorn[standard]>=0.32
 langgraph>=0.2
 sentence-transformers>=3.0
 numpy>=1.26
+httpx2

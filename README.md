@@ -78,6 +78,18 @@ make arch-mvp-export
 
 Просмотр в браузере: http://localhost:5173 (PoC), http://localhost:5174 (MVP).
 
+Экспортированные PNG (после `make arch-export`):
+
+| View ID | PoC | MVP |
+|---------|-----|-----|
+| C4 Context (L1) | `docs/diagrams/poc/poc_context.png` | `docs/diagrams/mvp/mvp_context.png` |
+| C4 Containers (L2) | `docs/diagrams/poc/poc_container.png` | `docs/diagrams/mvp/mvp_container.png` |
+| C4 Components (L3) | `docs/diagrams/poc/poc_component.png` | `docs/diagrams/mvp/mvp_component.png` |
+| Sequence POST /ask | `docs/diagrams/poc/poc_ask_sequence.png` | `docs/diagrams/mvp/mvp_ask_sequence.png` |
+| ER PostgreSQL | `docs/diagrams/poc/poc_er.png` | `docs/diagrams/mvp/mvp_er_postgres.png` |
+| ER Qdrant/Neo4j | — | `docs/diagrams/mvp/mvp_er_datastores.png` |
+| Deployment CP/DP | `docs/diagrams/poc/poc_deployment.png` | `docs/diagrams/mvp/mvp_deployment.png` |
+
 ## Структура репозитория
 
 ```

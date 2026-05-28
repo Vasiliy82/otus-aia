@@ -30,11 +30,11 @@
 
 ## Архитектурные артефакты
 
-- [ ] C4 Level 1–2 (Context + Container) для PoC
-- [ ] Sequence Diagram: User → Guardrails → GraphRAG → LLM
-- [ ] ER-диаграмма согласована со схемой БД
-- [ ] Deployment Diagram: разделение Control Plane и Data Plane
-- [ ] ADR зафиксированы для всех ключевых решений
+- [x] C4 Level 1–2 (Context + Container) для PoC — `docs/diagrams/poc/poc_context.png`, `poc_container.png`
+- [x] Sequence Diagram: User → Guardrails → GraphRAG → LLM — `docs/diagrams/poc/poc_ask_sequence.png`
+- [x] ER-диаграмма согласована со схемой БД — `docs/diagrams/poc/poc_er.png` (источник: `infra/sql/001-004`)
+- [x] Deployment Diagram: разделение Control Plane и Data Plane — `docs/diagrams/poc/poc_deployment.png`
+- [x] ADR зафиксированы для всех ключевых решений
 
 ## Целевая архитектура MVP
 
@@ -55,8 +55,9 @@
 - [x] FastAPI `POST /ask`, `GET /health`
 - [x] pgvector: миграция `004_embeddings.sql`, `make embed-chunks`
 - [x] Guardrails + pytest (`tests/backend/`)
+- [x] Диаграммы LikeC4 PoC: C4, Sequence, ER, Deployment (`docs/diagrams/poc/`)
+- [x] Диаграммы LikeC4 MVP: C4, Sequence, ER, Deployment (`docs/diagrams/mvp/`)
 
 ### В работе
 
-- [ ] Диаграммы C4, Sequence, ER, Deployment
 - [ ] Интеграционные тесты на CI с `RUN_INTEGRATION=1`

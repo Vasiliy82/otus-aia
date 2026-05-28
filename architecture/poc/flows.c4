@@ -1,0 +1,32 @@
+views {
+
+  dynamic view poc_ask_sequence {
+    title 'PoC: Sequence — POST /ask'
+    description '
+      Упрощённый сценарий приёмки:
+      User → Guardrails → GraphRAG → LLM.
+
+      Полный pipeline (backend/graph/workflow.py):
+      input_guardrails → classify_intent → vector_retrieve
+      → graph_expand → rbac_filter → rerank
+      → generate_answer → output_guardrails.
+    '
+    variant sequence
+
+    creditAnalyst
+      -> aiAssistant.fastapi.apiLayer 'POST /ask {query, role}'
+      -> aiAssistant.fastapi.guardrails 'input guardrails'
+      -> aiAssistant.fastapi.retrieval 'GraphRAG: vector + graph expand'
+      -> aiAssistant.fastapi.mockLlm 'generate_answer (MockLLM)'
+      -> aiAssistant.fastapi.guardrails 'output guardrails (citations)'
+      -> creditAnalyst 'answer + citations'
+
+    include
+      creditAnalyst,
+      aiAssistant.fastapi.apiLayer,
+      aiAssistant.fastapi.guardrails,
+      aiAssistant.fastapi.retrieval,
+      aiAssistant.fastapi.mockLlm
+  }
+
+}

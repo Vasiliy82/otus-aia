@@ -1,0 +1,42 @@
+deployment {
+
+  environment onPrem 'On-Prem PoC' {
+    description '
+      Единый on-prem контур банка.
+      Разделение Control Plane (оркестрация) и Data Plane (данные).
+    '
+
+    zone controlPlane 'Control Plane' {
+      description '
+        FastAPI backend: LangGraph, guardrails, retrieval,
+        RBAC, rerank, MockLLM, embeddings.
+      '
+      instanceOf aiAssistant.fastapi
+    }
+
+    zone dataPlane 'Data Plane' {
+      description '
+        PostgreSQL + pgvector, ETL pipeline.
+        Хранение chunks, графа, эмбеддингов, RBAC.
+      '
+      instanceOf aiAssistant.postgres
+      instanceOf aiAssistant.etlPipeline
+    }
+
+  }
+
+}
+
+views {
+
+  deployment view poc_deployment {
+    title 'PoC: Deployment — Control Plane / Data Plane'
+    description '
+      On-prem развёртывание PoC:
+      Control Plane (FastAPI backend) и Data Plane (PostgreSQL, ETL).
+    '
+    includeAncestors: true
+    include onPrem.**
+  }
+
+}

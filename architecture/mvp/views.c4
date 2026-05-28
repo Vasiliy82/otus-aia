@@ -8,6 +8,8 @@ views {
       Целевая Production архитектура MVP.
       Self-hosted Qwen + Neo4j + Qdrant + HashiCorp Vault + OTel.
       Q1-Q3 2027. Зависит от GO-решения ТехКома по PoC.
+
+      Дополнительно: mvp_ask_sequence, mvp_er_*, mvp_deployment.
     '
     include *
     style aiAssistant {
@@ -98,27 +100,6 @@ views {
       aiAssistant.prometheus,
       aiAssistant.apiGateway,
       aiAssistant.vllm
-  }
-
-  // ─── Deployment Zones ────────────────────────────────────────────────────
-
-  view mvp_deployment {
-    title 'MVP: Deployment Zones'
-    description '
-      Зоны развёртывания:
-      DMZ (API Gateway) → Control Plane (Backend, Vault) →
-      Data Plane (Neo4j, Qdrant, PostgreSQL, MinIO) →
-      GPU Zone (vLLM/Qwen) →
-      Observability (OTel, Jaeger, Prometheus).
-    '
-    include
-      creditAnalyst,
-      complianceOfficer,
-      aiAssistant.*
-
-    style aiAssistant {
-      opacity 0%
-    }
   }
 
 }

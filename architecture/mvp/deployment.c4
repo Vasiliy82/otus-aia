@@ -1,0 +1,59 @@
+deployment {
+
+  environment prod 'Production MVP' {
+    description '
+      Целевое on-prem развёртывание MVP (Q1-Q3 2027).
+      DMZ, Control Plane, Data Plane, GPU Zone, Observability.
+    '
+
+    zone dmz 'DMZ' {
+      description 'Perimeter: API Gateway, mTLS ingress.'
+      instanceOf aiAssistant.apiGateway
+    }
+
+    zone controlPlane 'Control Plane' {
+      description 'Оркестрация, секреты, guardrails, RBAC logic.'
+      instanceOf aiAssistant.apiGateway
+      instanceOf aiAssistant.vault
+    }
+
+    zone dataPlane 'Data Plane' {
+      description 'PostgreSQL, Qdrant, Neo4j, MinIO, ETL.'
+      instanceOf aiAssistant.postgres
+      instanceOf aiAssistant.qdrant
+      instanceOf aiAssistant.neo4j
+      instanceOf aiAssistant.minio
+      instanceOf aiAssistant.etlPipeline
+    }
+
+    zone gpuZone 'GPU Zone' {
+      description 'Self-hosted Qwen via vLLM (CUDA).'
+      instanceOf aiAssistant.vllm
+    }
+
+    zone observability 'Observability' {
+      description 'OTel Collector, Jaeger, Prometheus/Grafana.'
+      instanceOf aiAssistant.otelCollector
+      instanceOf aiAssistant.jaeger
+      instanceOf aiAssistant.prometheus
+    }
+
+  }
+
+}
+
+views {
+
+  deployment view mvp_deployment {
+    title 'MVP: Deployment — Control Plane / Data Plane'
+    description '
+      Зоны развёртывания MVP:
+      DMZ → Control Plane (Backend, Vault) →
+      Data Plane (Neo4j, Qdrant, PostgreSQL, MinIO) →
+      GPU Zone (vLLM) → Observability.
+    '
+    includeAncestors: true
+    include prod.**
+  }
+
+}

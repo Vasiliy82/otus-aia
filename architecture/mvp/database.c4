@@ -1,0 +1,122 @@
+model {
+
+  extend aiAssistant.postgres {
+
+    company = pgTable 'company' {
+      description 'PK: company_id. inn UNIQUE. infra/sql/001_financial.sql'
+    }
+
+    financial_report = pgTable 'financial_report' {
+      description 'PK: report_id. FK: company_id → company.'
+      -> company 'company_id'
+    }
+
+    financial_fact = pgTable 'financial_fact' {
+      description 'PK: fact_id. FK: company_id, source_report_id.'
+      -> company 'company_id'
+      -> financial_report 'source_report_id'
+    }
+
+    risk_factor = pgTable 'risk_factor' {
+      description 'PK: risk_factor_id. code UNIQUE.'
+    }
+
+    company_risk = pgTable 'company_risk' {
+      description 'PK: company_risk_id. FK: company, risk_factor, fact.'
+      -> company 'company_id'
+      -> risk_factor 'risk_factor_id'
+      -> financial_fact 'fact_id'
+    }
+
+    document = pgTable 'document' {
+      description 'PK: document_id. chunk metadata source. infra/sql/002.'
+    }
+
+    chunk = pgTable 'chunk' {
+      description 'PK: chunk_id. FK: document_id. allowed_roles[].'
+      -> document 'document_id'
+    }
+
+    graph_node = pgTable 'graph_node' {
+      description 'PK: node_id. Legacy/sync metadata (MVP: Neo4j primary).'
+    }
+
+    graph_edge = pgTable 'graph_edge' {
+      description 'PK: edge_id. FK: graph_node, chunk.'
+      -> graph_node 'source_node_id'
+      -> graph_node 'target_node_id'
+      -> chunk 'source_chunk_id'
+    }
+
+    chunk_embedding = pgTable 'chunk_embedding' {
+      description 'PK/FK: chunk_id. MVP: vectors in Qdrant; PG for audit/sync.'
+      -> chunk 'chunk_id'
+    }
+
+  }
+
+  extend aiAssistant.qdrant {
+
+    chunkVectors = datastoreEntity 'chunk_vectors collection' {
+      description '
+        Dense embeddings (dim=768+), HNSW cosine.
+        Payload: chunk_id, document_id, allowed_roles.
+      '
+    }
+
+  }
+
+  extend aiAssistant.neo4j {
+
+    graphNodes = datastoreEntity 'Graph nodes' {
+      description '
+        Labels: Chunk, Document, Company, Risk, Law.
+        Properties: node_id, label, metadata.
+      '
+    }
+
+    graphEdges = datastoreEntity 'Graph relationships' {
+      description '
+        Types: BELONGS_TO, MENTIONS, LINKED_TO.
+        weight, confidence, source_chunk_id.
+      '
+      -> graphNodes 'source → target'
+    }
+
+  }
+
+}
+
+views {
+
+  view mvp_er_postgres of aiAssistant.postgres {
+    title 'MVP: ER — PostgreSQL'
+    description '
+      Реляционная схема MVP (metadata, RBAC, audit).
+      Согласована с infra/sql/001-004.
+    '
+    include *
+
+    style aiAssistant.postgres {
+      opacity 0%
+    }
+  }
+
+  view mvp_er_datastores {
+    title 'MVP: ER — Qdrant & Neo4j (logical)'
+    description '
+      Логические сущности векторного и графового хранилищ MVP.
+      Не DDL — согласование с model.c4 (Qdrant + Neo4j).
+    '
+    include
+      aiAssistant.qdrant,
+      aiAssistant.neo4j,
+      aiAssistant.qdrant.*,
+      aiAssistant.neo4j.*
+
+    style aiAssistant.qdrant, aiAssistant.neo4j {
+      opacity 0%
+    }
+  }
+
+}
