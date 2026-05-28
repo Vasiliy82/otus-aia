@@ -14,12 +14,68 @@ views {
     variant sequence
 
     creditAnalyst
-      -> aiAssistant.fastapi.apiLayer 'POST /ask {query, role}'
-      -> aiAssistant.fastapi.guardrails 'input guardrails'
-      -> aiAssistant.fastapi.retrieval 'GraphRAG: vector + graph expand'
-      -> aiAssistant.fastapi.mockLlm 'generate_answer (MockLLM)'
-      -> aiAssistant.fastapi.guardrails 'output guardrails (citations)'
-      -> creditAnalyst 'answer + citations'
+      -> aiAssistant.fastapi.apiLayer 'POST /ask {query, role}' {
+      notes '''
+        **Входной запрос от кредитного аналитика**
+
+        Передаём:
+        - `query` — текст вопроса
+        - `role` — роль пользователя для RBAC-фильтрации
+
+        На этом шаге API принимает запрос и запускает backend workflow.
+      '''
+    }
+      -> aiAssistant.fastapi.guardrails 'input guardrails' {
+      notes '''
+        **Проверка входа**
+
+        Guardrails проверяют:
+        - недопустимые запросы
+        - prompt injection
+        - формат входных данных
+        - ограничения роли пользователя
+      '''
+    }
+      -> aiAssistant.fastapi.retrieval 'GraphRAG: vector + graph expand' {
+      notes '''
+        **GraphRAG: поиск контекста**
+
+        Retrieval выполняет:
+        - векторный поиск top-k (pgvector, cosine)
+        - BFS 1-hop по graph_edge (BELONGS_TO, MENTIONS, LINKED_TO)
+        - сбор релевантных чанков для генерации ответа
+      '''
+    }
+      -> aiAssistant.fastapi.mockLlm 'generate_answer (MockLLM)' {
+      notes '''
+        **Генерация ответа (MockLLM)**
+
+        MockLLM формирует ответ без внешнего API:
+        - шаблонный текст на основе контекста из retrieval
+        - перечень citations из отобранных чанков
+      '''
+    }
+      -> aiAssistant.fastapi.guardrails 'output guardrails (citations)' {
+      notes '''
+        **Проверка выхода**
+
+        Output guardrails проверяют:
+        - наличие citations в ответе
+        - блокировку ответа без источников
+        - соответствие формату ответа
+      '''
+    }
+      -> creditAnalyst 'answer + citations' {
+      notes '''
+        **Ответ аналитику**
+
+        Клиент получает:
+        - `answer` — текст ответа
+        - `citations` — ссылки на источники
+        - `trace_id` — идентификатор трассировки
+        - `blocked` — флаг блокировки ответа
+      '''
+    }
 
     include
       creditAnalyst,

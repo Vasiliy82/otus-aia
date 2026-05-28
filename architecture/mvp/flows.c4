@@ -12,14 +12,84 @@ views {
     variant sequence
 
     creditAnalyst
-      -> aiAssistant.apiGateway.apiLayer 'POST /ask {query, role}'
-      -> aiAssistant.apiGateway.guardrails 'input guardrails'
-      -> aiAssistant.apiGateway.retrieval 'GraphRAG: Qdrant + Neo4j'
-      -> aiAssistant.apiGateway.llmClient 'generate_answer'
-      -> aiAssistant.vllm 'POST /v1/chat/completions'
-      -> aiAssistant.apiGateway.llmClient 'stream response'
-      -> aiAssistant.apiGateway.guardrails 'output guardrails'
-      -> creditAnalyst 'answer + citations'
+      -> aiAssistant.apiGateway.apiLayer 'POST /ask {query, role}' {
+      notes '''
+        **Входной запрос**
+
+        Передаём:
+        - `query` — текст вопроса
+        - `role` — роль пользователя для RBAC-фильтрации
+
+        Запрос приходит через DMZ с mTLS; API запускает LangGraph workflow.
+      '''
+    }
+      -> aiAssistant.apiGateway.guardrails 'input guardrails' {
+      notes '''
+        **Проверка входа**
+
+        Guardrails проверяют:
+        - prompt injection и стоп-паттерны
+        - обнаружение PII
+        - формат входных данных и ограничения роли
+      '''
+    }
+      -> aiAssistant.apiGateway.retrieval 'GraphRAG: Qdrant + Neo4j' {
+      notes '''
+        **Гибридный GraphRAG**
+
+        Retrieval выполняет:
+        - dense-поиск в Qdrant (top-k)
+        - graph expand в Neo4j (Cypher, 1–2 hop)
+        - слияние контекста после RBAC и rerank
+      '''
+    }
+      -> aiAssistant.apiGateway.llmClient 'generate_answer' {
+      notes '''
+        **Подготовка промпта**
+
+        LLM Client формирует запрос к vLLM:
+        - контекст из retrieval после RBAC и cross-encoder rerank
+        - системный промпт и инструкции по citations
+      '''
+    }
+      -> aiAssistant.vllm 'POST /v1/chat/completions' {
+      notes '''
+        **Вызов LLM**
+
+        Self-hosted Qwen через vLLM:
+        - OpenAI-compatible API
+        - генерация ответа на GPU-сервере
+      '''
+    }
+      -> aiAssistant.apiGateway.llmClient 'stream response' {
+      notes '''
+        **Стриминг ответа**
+
+        LLM Client получает поток токенов от vLLM:
+        - сбор полного текста ответа
+        - retry и timeout при сбоях
+      '''
+    }
+      -> aiAssistant.apiGateway.guardrails 'output guardrails' {
+      notes '''
+        **Проверка выхода**
+
+        Output guardrails проверяют:
+        - валидность citations
+        - признаки галлюцинаций
+        - блокировку ответа без источников
+      '''
+    }
+      -> creditAnalyst 'answer + citations' {
+      notes '''
+        **Ответ + трассировка**
+
+        Клиент получает:
+        - `answer` и `citations`
+        - `trace_id` для drill-down в Jaeger (OpenTelemetry)
+        - `blocked` — флаг блокировки ответа
+      '''
+    }
 
     include
       creditAnalyst,
