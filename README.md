@@ -16,12 +16,15 @@ source .venv/bin/activate
 
 cp .env.example .env
 make install-backend
+make obs-up
 make data-all
 make embed-chunks
 make api
 ```
 
-`make data-all` поднимает PostgreSQL (pgvector), применяет миграции, готовит демо-датасет и загружает его в БД.
+`make obs-up` поднимает PostgreSQL (pgvector), Jaeger UI (:16686) и otel-collector (:4317).
+`make data-all` применяет миграции, готовит демо-датасет и загружает его в БД.
+`make api` загружает embedding-модель сразу при старте (warmup), без ожидания первого `/ask`.
 
 Демо GraphRAG:
 
@@ -36,6 +39,12 @@ curl -s -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \
   -d '{"query":"Секретная методика оценки риска","role":"risk_manager"}'
 ```
+
+Observability:
+
+- JSON-логи каждого шага RAG (`rag_step`) в stdout API
+- Jaeger UI: http://localhost:16686 — трассировка `POST /ask` и узлов LangGraph
+- `trace_id` в ответе `/ask` совпадает с trace ID в Jaeger
 
 Отдельные шаги:
 
@@ -94,7 +103,7 @@ make arch-mvp-export
 
 ```
 architecture/   LikeC4-модели PoC и MVP
-infra/          Docker Compose (pgvector, LikeC4), SQL-схемы
+infra/          Docker Compose (pgvector, Jaeger, otel-collector, LikeC4), SQL-схемы
 scripts/        Пайплайн подготовки данных
 backend/        LangGraph, FastAPI, pgvector retrieval
 docs/           ADR, scope PoC, diagrams/ (PNG из LikeC4)

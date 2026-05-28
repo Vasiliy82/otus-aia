@@ -6,6 +6,8 @@ import psycopg
 
 from backend.config import EXPAND_EDGE_TYPES, EXPAND_HOPS
 from backend.db import get_connection
+from backend.observability.logging import log_rag_step
+from backend.observability.tracing import traced_span
 from backend.state import ChunkContext, GraphNodeContext
 
 logger = logging.getLogger(__name__)
@@ -138,6 +140,7 @@ def expand_from_chunks(
     *,
     hops: int = EXPAND_HOPS,
     conn: psycopg.Connection | None = None,
+    trace_id: str | None = None,
 ) -> tuple[list[GraphNodeContext], list[ChunkContext]]:
     seed_node_ids: list[str] = []
     for ch in seed_chunks:
@@ -181,7 +184,17 @@ def expand_from_chunks(
         return list(all_nodes.values()), graph_chunks
 
     if conn is not None:
-        return _run(conn)
+        with traced_span("rag.graph_expand_db", attributes={"rag.trace_id": trace_id or ""}):
+            result = _run(conn)
+            if trace_id:
+                log_rag_step(
+                    trace_id,
+                    "graph_expand_db",
+                    hops=hops,
+                    nodes=len(result[0]),
+                    chunks=len(result[1]),
+                )
+        return result
 
     with get_connection() as connection:
-        return expand_from_chunks(seed_chunks, hops=hops, conn=connection)
+        return expand_from_chunks(seed_chunks, hops=hops, conn=connection, trace_id=trace_id)

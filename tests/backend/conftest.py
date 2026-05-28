@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import os
 
+os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
+os.environ.setdefault("JSON_LOGS", "false")
+
 import pytest
 import psycopg
 

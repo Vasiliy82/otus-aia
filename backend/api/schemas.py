@@ -31,6 +31,10 @@ class AskResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
+    model_loaded: bool = False
+    workflow_ready: bool = False
+    ready: bool = False
+    error: str | None = None
 
 
 def state_to_response(state: dict[str, Any]) -> AskResponse:

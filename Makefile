@@ -1,4 +1,4 @@
-.PHONY: help install install-backend db-up db-down db-wait db-migrate data-download data-prepare data-load data-all data-clean clean embed-chunks api test-data test-backend test-all arch-build arch-dev arch-dev-poc arch-dev-mvp arch-dev-down arch-poc-export arch-mvp-export arch-export
+.PHONY: help install install-backend db-up db-down db-wait db-migrate data-download data-prepare data-load data-all data-clean clean embed-chunks api test-data test-backend test-all obs-up obs-down arch-build arch-dev arch-dev-poc arch-dev-mvp arch-dev-down arch-poc-export arch-mvp-export arch-export
 
 PYTHON ?= python
 ENV_FILE := $(if $(wildcard .env),.env,.env.example)
@@ -18,7 +18,9 @@ help:
 	@echo "  data-load         Load prepared data into PostgreSQL"
 	@echo "  data-all          db-up + db-wait + db-migrate + data-prepare + data-load"
 	@echo "  embed-chunks      Index chunk embeddings (after data-load)"
-	@echo "  api               Run FastAPI on :8000"
+	@echo "  api               Run FastAPI on :8000 (eager model warmup on startup)"
+	@echo "  obs-up            Start PostgreSQL + Jaeger + otel-collector"
+	@echo "  obs-down          Stop Jaeger and otel-collector"
 	@echo "  data-clean        Remove data/processed/"
 	@echo "  clean             Full cleanup (containers, volumes, generated artifacts)"
 	@echo "  test-data         Run data pipeline tests"
@@ -91,6 +93,12 @@ embed-chunks:
 
 api:
 	$(PYTHON) -m backend serve
+
+obs-up:
+	$(COMPOSE) up -d postgres jaeger otel-collector
+
+obs-down:
+	$(COMPOSE) stop jaeger otel-collector
 
 test-data:
 	$(PYTHON) -m pytest tests/data_prep -q

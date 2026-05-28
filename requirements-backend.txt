@@ -4,4 +4,8 @@ uvicorn[standard]>=0.32
 langgraph>=0.2
 sentence-transformers>=3.0
 numpy>=1.26
-httpx2
+opentelemetry-api>=1.27
+opentelemetry-sdk>=1.27
+opentelemetry-exporter-otlp-proto-grpc>=1.27
+opentelemetry-instrumentation-fastapi>=0.48b0
+opentelemetry-instrumentation-logging>=0.48b0

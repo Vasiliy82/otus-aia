@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter
 
+from backend import startup as startup_state
 from backend.api.schemas import AskRequest, AskResponse, HealthResponse, state_to_response
 from backend.graph.workflow import run_ask
 
@@ -14,7 +15,12 @@ router = APIRouter()
 
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    return HealthResponse()
+    return HealthResponse(
+        model_loaded=startup_state.model_loaded,
+        workflow_ready=startup_state.workflow_ready,
+        ready=startup_state.model_loaded and startup_state.workflow_ready,
+        error=startup_state.startup_error,
+    )
 
 
 @router.post("/ask", response_model=AskResponse)

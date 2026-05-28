@@ -32,3 +32,15 @@ DEMO_INN = os.getenv("DEMO_INN", "")
 
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8000"))
+
+OTEL_TRACES_ENABLED = os.getenv("OTEL_TRACES_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+OTEL_EXPORTER_OTLP_ENDPOINT = os.getenv(
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "http://localhost:4317",
+)
+OTEL_SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "graphrag-poc")
+JSON_LOGS = os.getenv("JSON_LOGS", "true").lower() in ("1", "true", "yes")

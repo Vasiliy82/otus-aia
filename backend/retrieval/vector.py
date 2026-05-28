@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import psycopg
 
 from backend.config import TOP_K
 from backend.db import get_connection
 from backend.embeddings.model import EmbeddingModel, get_embedding_model
+from backend.observability.logging import log_rag_step
+from backend.observability.tracing import traced_span
 from backend.state import ChunkContext
 
 logger = logging.getLogger(__name__)
@@ -34,9 +37,17 @@ def vector_search(
     top_k: int = TOP_K,
     conn: psycopg.Connection | None = None,
     model: EmbeddingModel | None = None,
+    trace_id: str | None = None,
 ) -> list[ChunkContext]:
     model = model or get_embedding_model()
-    embedding = model.encode_one(query)
+
+    with traced_span("rag.embed_query", attributes={"rag.trace_id": trace_id or ""}):
+        started = time.perf_counter()
+        embedding = model.encode_one(query)
+        embed_ms = round((time.perf_counter() - started) * 1000, 2)
+        if trace_id:
+            log_rag_step(trace_id, "embed_query", duration_ms=embed_ms, dim=len(embedding))
+
     embedding_literal = "[" + ",".join(str(x) for x in embedding) + "]"
 
     sql = """
@@ -56,10 +67,27 @@ def vector_search(
     """
 
     if conn is not None:
-        with conn.cursor() as cur:
-            cur.execute(sql, (embedding_literal, embedding_literal, top_k))
-            rows = cur.fetchall()
+        with traced_span("rag.pgvector_search", attributes={"rag.trace_id": trace_id or ""}):
+            started = time.perf_counter()
+            with conn.cursor() as cur:
+                cur.execute(sql, (embedding_literal, embedding_literal, top_k))
+                rows = cur.fetchall()
+            search_ms = round((time.perf_counter() - started) * 1000, 2)
+            if trace_id:
+                log_rag_step(
+                    trace_id,
+                    "pgvector_search",
+                    top_k=top_k,
+                    hits=len(rows),
+                    duration_ms=search_ms,
+                )
         return [_row_to_chunk(r) for r in rows]
 
     with get_connection() as connection:
-        return vector_search(query, top_k=top_k, conn=connection, model=model)
+        return vector_search(
+            query,
+            top_k=top_k,
+            conn=connection,
+            model=model,
+            trace_id=trace_id,
+        )
