@@ -1,10 +1,9 @@
-.PHONY: help install install-backend db-up db-down db-wait db-migrate data-download data-prepare data-load data-all data-clean embed-chunks api test-data test-backend test-all arch-build arch-poc-site arch-poc-export arch-mvp-site arch-mvp-export arch-poc arch-mvp arch-all arch-dev-poc arch-dev-mvp
+.PHONY: help install install-backend db-up db-down db-wait db-migrate data-download data-prepare data-load data-all data-clean clean embed-chunks api test-data test-backend test-all arch-build arch-dev arch-dev-poc arch-dev-mvp arch-dev-down arch-poc-export arch-mvp-export arch-export
 
 PYTHON ?= python
 ENV_FILE := $(if $(wildcard .env),.env,.env.example)
 COMPOSE      ?= docker compose -f infra/docker-compose.yml --env-file $(ENV_FILE)
 COMPOSE_ARCH ?= docker compose -f infra/docker-compose.arch.yml
-ARCH_RUN     = $(COMPOSE_ARCH) run --rm
 
 help:
 	@echo "Targets:"
@@ -21,21 +20,20 @@ help:
 	@echo "  embed-chunks      Index chunk embeddings (after data-load)"
 	@echo "  api               Run FastAPI on :8000"
 	@echo "  data-clean        Remove data/processed/"
+	@echo "  clean             Full cleanup (containers, volumes, generated artifacts)"
 	@echo "  test-data         Run data pipeline tests"
 	@echo "  test-backend      Run backend unit tests"
 	@echo "  test-all          test-data + test-backend"
 	@echo ""
-	@echo "Architecture (LikeC4, custom image otus-aia/likec4:local):"
-	@echo "  arch-build        Build LikeC4 Docker image (required once)"
-	@echo "  arch-poc-site     Build static website for PoC  → dist/arch/poc/"
-	@echo "  arch-poc-export   Export PoC diagrams to PNG    → docs/diagrams/poc/"
-	@echo "  arch-mvp-site     Build static website for MVP  → dist/arch/mvp/"
-	@echo "  arch-mvp-export   Export MVP diagrams to PNG    → docs/diagrams/mvp/"
-	@echo "  arch-poc          arch-poc-site + arch-poc-export"
-	@echo "  arch-mvp          arch-mvp-site + arch-mvp-export"
-	@echo "  arch-all          arch-poc + arch-mvp"
-	@echo "  arch-dev-poc      Live preview PoC on :5173"
-	@echo "  arch-dev-mvp      Live preview MVP on :5174"
+	@echo "Architecture (LikeC4, image otus-aia/likec4:local):"
+	@echo "  arch-build        Build LikeC4 Docker image (first time)"
+	@echo "  arch-dev          Start PoC :5173 + MVP :5174 dev servers (background)"
+	@echo "  arch-dev-poc      Start PoC dev server only"
+	@echo "  arch-dev-mvp      Start MVP dev server only"
+	@echo "  arch-dev-down     Stop LikeC4 dev containers"
+	@echo "  arch-poc-export   Export PoC PNG (requires arch-dev-poc running)"
+	@echo "  arch-mvp-export   Export MVP PNG (requires arch-dev-mvp running)"
+	@echo "  arch-export       arch-poc-export + arch-mvp-export"
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -70,6 +68,24 @@ data-all: db-up db-wait db-migrate data-prepare data-load
 data-clean:
 	rm -rf data/processed/*
 
+clean:
+# Останавливаем и удаляем все ресурсы основного compose-проекта (включая тома) и orphan-контейнеры.
+	$(COMPOSE) down --volumes --remove-orphans || true
+# Останавливаем и удаляем все ресурсы compose-проекта архитектурных диаграмм (включая тома) и orphan-контейнеры.
+	$(COMPOSE_ARCH) down --volumes --remove-orphans || true
+# Удаляем экспортированные PNG-диаграммы PoC.
+	rm -f docs/diagrams/poc/*.png
+# Удаляем экспортированные PNG-диаграммы MVP.
+	rm -f docs/diagrams/mvp/*.png
+# Удаляем подготовленные датасеты/артефакты пайплайна.
+	rm -rf data/processed/* data/poc/*
+# Удаляем скачанные сырьевые данные, полученные командой make data-download.
+	rm -rf data/raw/*
+# Удаляем временные кэши тестов и анализаторов.
+	rm -rf .pytest_cache/ .mypy_cache/ .ruff_cache/
+# Удаляем локальные Python-кэши и артефакты сборки пакета.
+	rm -rf __pycache__/ build/ *.egg-info/
+
 embed-chunks:
 	$(PYTHON) -m backend embed
 
@@ -87,36 +103,34 @@ test-all: test-data test-backend
 # ─── Architecture Diagrams (LikeC4) ──────────────────────────────────────────
 
 arch-build:
-	$(COMPOSE_ARCH) build likec4
+	$(COMPOSE_ARCH) build likec4-dev-poc
 
-arch-poc-site: arch-build
-	$(ARCH_RUN) -v $(CURDIR)/architecture/poc:/data \
-	  -v $(CURDIR)/dist/arch/poc:/data/dist \
-	  likec4 build -o dist --base "./"
-
-arch-poc-export: arch-build
-	$(ARCH_RUN) -v $(CURDIR)/architecture/poc:/data \
-	  -v $(CURDIR)/docs/diagrams/poc:/data/assets \
-	  likec4 export png --output assets
-
-arch-mvp-site: arch-build
-	$(ARCH_RUN) -v $(CURDIR)/architecture/mvp:/data \
-	  -v $(CURDIR)/dist/arch/mvp:/data/dist \
-	  likec4 build -o dist --base "./"
-
-arch-mvp-export: arch-build
-	$(ARCH_RUN) -v $(CURDIR)/architecture/mvp:/data \
-	  -v $(CURDIR)/docs/diagrams/mvp:/data/assets \
-	  likec4 export png --output assets
-
-arch-poc: arch-poc-site arch-poc-export
-
-arch-mvp: arch-mvp-site arch-mvp-export
-
-arch-all: arch-poc arch-mvp
+arch-dev: arch-build
+	$(COMPOSE_ARCH) up -d likec4-dev-poc likec4-dev-mvp
 
 arch-dev-poc: arch-build
-	$(COMPOSE_ARCH) --profile arch-dev up likec4-dev-poc
+	$(COMPOSE_ARCH) up -d likec4-dev-poc
 
 arch-dev-mvp: arch-build
-	$(COMPOSE_ARCH) --profile arch-dev up likec4-dev-mvp
+	$(COMPOSE_ARCH) up -d likec4-dev-mvp
+
+arch-dev-down:
+	$(COMPOSE_ARCH) down
+
+arch-poc-export:
+	@if [ -z "$$($(COMPOSE_ARCH) ps -q likec4-dev-poc 2>/dev/null)" ]; then \
+	  echo "likec4-dev-poc is not running. Start: make arch-dev-poc (or make arch-dev)"; exit 1; \
+	fi
+	$(COMPOSE_ARCH) exec -T likec4-dev-poc \
+	  likec4 export png --output assets \
+	  --server-url http://127.0.0.1:5173/ --timeout 60
+
+arch-mvp-export:
+	@if [ -z "$$($(COMPOSE_ARCH) ps -q likec4-dev-mvp 2>/dev/null)" ]; then \
+	  echo "likec4-dev-mvp is not running. Start: make arch-dev-mvp (or make arch-dev)"; exit 1; \
+	fi
+	$(COMPOSE_ARCH) exec -T likec4-dev-mvp \
+	  likec4 export png --output assets \
+	  --server-url http://127.0.0.1:5173/ --timeout 60
+
+arch-export: arch-poc-export arch-mvp-export

@@ -1,17 +1,8 @@
 services:
 
-  # Batch CLI: use via `docker compose run --rm likec4 <command>`
-  likec4:
+  likec4-dev-poc:
     build:
       context: ./likec4
-    image: otus-aia/likec4:local
-    working_dir: /data
-    init: true
-    ipc: host
-    entrypoint: ["likec4"]
-
-  # Interactive dev: PoC model on http://localhost:5173
-  likec4-dev-poc:
     image: otus-aia/likec4:local
     working_dir: /data
     init: true
@@ -24,10 +15,9 @@ services:
       CHOKIDAR_INTERVAL: "200"
     volumes:
       - ../architecture/poc:/data
+      - ../docs/diagrams/poc:/data/assets
     command: ["start", "--host", "0.0.0.0"]
-    profiles: [arch-dev]
 
-  # Interactive dev: MVP model on http://localhost:5174
   likec4-dev-mvp:
     image: otus-aia/likec4:local
     working_dir: /data
@@ -41,5 +31,5 @@ services:
       CHOKIDAR_INTERVAL: "200"
     volumes:
       - ../architecture/mvp:/data
+      - ../docs/diagrams/mvp:/data/assets
     command: ["start", "--host", "0.0.0.0"]
-    profiles: [arch-dev]

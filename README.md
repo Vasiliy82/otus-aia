@@ -56,21 +56,24 @@ RUN_INTEGRATION=1 make test-backend
 
 Исходники: `architecture/poc/` (реализованный PoC), `architecture/mvp/` (целевая архитектура).
 
-Первый запуск — собрать кастомный образ (в нём доустановлен Playwright для экспорта PNG):
-
 ```bash
-make arch-build
-make arch-poc-export    # → docs/diagrams/poc/*.png
-make arch-poc-site      # → dist/arch/poc/index.html
-make arch-all           # PoC + MVP (сайт и PNG)
+make arch-build       # первый раз: образ с Playwright
+make arch-dev         # dev-серверы в фоне: PoC :5173, MVP :5174
+make arch-export      # PNG → docs/diagrams/poc|mvp/ (нужны запущенные dev-контейнеры)
+make arch-dev-down    # остановить dev-контейнеры
 ```
 
-Интерактивный просмотр при правке `.c4` файлов:
+Только одна модель:
 
 ```bash
-make arch-dev-poc       # http://localhost:5173
-make arch-dev-mvp       # http://localhost:5174
+make arch-dev-poc
+make arch-poc-export  # после arch-dev-poc
+
+make arch-dev-mvp
+make arch-mvp-export
 ```
+
+Просмотр в браузере: http://localhost:5173 (PoC), http://localhost:5174 (MVP).
 
 ## Структура репозитория
 
@@ -79,7 +82,7 @@ architecture/   LikeC4-модели PoC и MVP
 infra/          Docker Compose (pgvector, LikeC4), SQL-схемы
 scripts/        Пайплайн подготовки данных
 backend/        LangGraph, FastAPI, pgvector retrieval
-docs/           ADR, scope PoC, архитектурная документация
+docs/           ADR, scope PoC, diagrams/ (PNG из LikeC4)
 data/raw/       Сырые данные (gitignore)
 data/poc/       Экспорт артефактов после prepare
 ```
