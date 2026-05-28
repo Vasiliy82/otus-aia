@@ -11,6 +11,9 @@
 ## Быстрый старт
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
 cp .env.example .env
 make install-backend
 make data-all
