@@ -16,6 +16,7 @@ from backend.observability.logging import log_rag_step
 from backend.observability.tracing import current_trace_id_hex, get_tracer, traced_span
 from backend.rbac.filter import filter_chunks_by_role
 from backend.rerank.score import dedupe_chunks, rerank_chunks
+from backend.retrieval.financial import lookup_financial_facts
 from backend.retrieval.graph_expand import expand_from_chunks
 from backend.retrieval.vector import vector_search
 from backend.state import AskState, audit
@@ -27,6 +28,15 @@ _llm = MockLLMClient()
 
 def _blocked_route(state: AskState) -> Literal["blocked", "ok"]:
     return "blocked" if state.get("blocked") else "ok"
+
+
+def _intent_route(state: AskState) -> Literal["risk_analysis", "compliance", "general"]:
+    intent = state.get("intent") or "general"
+    if intent == "risk_analysis":
+        return "risk_analysis"
+    if intent == "compliance":
+        return "compliance"
+    return "general"
 
 
 def _trace_id(state: AskState) -> str:
@@ -69,18 +79,55 @@ def node_classify_intent(state: AskState) -> dict:
         elif any(w in q for w in ("закон", "норм", "политик", "policy")):
             intent = "compliance"
         demo_inn = DEMO_INN or None
-        log_rag_step(trace_id, "classify_intent", intent=intent, demo_inn=demo_inn)
+        update: dict = {"intent": intent, "demo_inn": demo_inn}
+        if intent == "compliance":
+            update["search_scope"] = "compliance"
+        log_rag_step(
+            trace_id,
+            "classify_intent",
+            intent=intent,
+            demo_inn=demo_inn,
+            search_scope=update.get("search_scope"),
+        )
         return audit(
             state,
             "classify_intent",
             intent,
-        ) | {"intent": intent, "demo_inn": demo_inn}
+        ) | update
+
+
+def node_financial_lookup(state: AskState) -> dict:
+    trace_id = _trace_id(state)
+    inn = state.get("demo_inn")
+    with traced_span(
+        "rag.financial_lookup",
+        attributes={"rag.trace_id": trace_id, "rag.inn": inn or ""},
+    ):
+        facts = lookup_financial_facts(inn)
+        log_rag_step(
+            trace_id,
+            "financial_lookup",
+            inn=facts.get("inn"),
+            risk_flags=facts["risk_flags"],
+        )
+        return audit(
+            state,
+            "financial_lookup",
+            f"{len(facts['risk_flags'])} risk flags",
+        ) | {"financial_facts": facts}
 
 
 def node_vector_retrieve(state: AskState) -> dict:
     trace_id = _trace_id(state)
+    search_scope = state.get("search_scope")
     started = time.perf_counter()
-    with traced_span("rag.vector_retrieve", attributes={"rag.trace_id": trace_id}):
+    with traced_span(
+        "rag.vector_retrieve",
+        attributes={
+            "rag.trace_id": trace_id,
+            "rag.search_scope": search_scope or "",
+        },
+    ):
         chunks = vector_search(state.get("query", ""), trace_id=trace_id)
         duration_ms = round((time.perf_counter() - started) * 1000, 2)
         log_rag_step(
@@ -90,6 +137,7 @@ def node_vector_retrieve(state: AskState) -> dict:
             chunk_ids=[c.get("chunk_id") for c in chunks],
             scores=[c.get("vector_score") for c in chunks],
             duration_ms=duration_ms,
+            search_scope=search_scope,
         )
         return audit(state, "vector_retrieve", f"{len(chunks)} chunks") | {
             "retrieved_chunks": chunks,
@@ -225,6 +273,7 @@ def build_workflow():
     graph = StateGraph(AskState)
     graph.add_node("input_guardrails", node_input_guardrails)
     graph.add_node("classify_intent", node_classify_intent)
+    graph.add_node("financial_lookup", node_financial_lookup)
     graph.add_node("vector_retrieve", node_vector_retrieve)
     graph.add_node("graph_expand", node_graph_expand)
     graph.add_node("rbac_filter", node_rbac_filter)
@@ -240,7 +289,16 @@ def build_workflow():
         {"blocked": "blocked_end", "ok": "classify_intent"},
     )
     graph.add_edge("blocked_end", END)
-    graph.add_edge("classify_intent", "vector_retrieve")
+    graph.add_conditional_edges(
+        "classify_intent",
+        _intent_route,
+        {
+            "risk_analysis": "financial_lookup",
+            "compliance": "vector_retrieve",
+            "general": "vector_retrieve",
+        },
+    )
+    graph.add_edge("financial_lookup", "vector_retrieve")
     graph.add_edge("vector_retrieve", "graph_expand")
     graph.add_edge("graph_expand", "rbac_filter")
     graph.add_edge("rbac_filter", "rerank")
@@ -284,6 +342,7 @@ def run_ask(query: str, role: str, *, trace_id: str | None = None) -> AskState:
             "context_chunks": [],
             "citations": [],
             "audit_steps": [],
+            "financial_facts": None,
         }
         result = workflow.invoke(initial)
 
@@ -293,6 +352,8 @@ def run_ask(query: str, role: str, *, trace_id: str | None = None) -> AskState:
         role=role,
         blocked=result.get("blocked"),
         steps=len(result.get("audit_steps") or []),
+        intent=result.get("intent"),
+        has_financial_facts=result.get("financial_facts") is not None,
     )
     logger.info(
         "ask_complete trace_id=%s role=%s blocked=%s steps=%s",

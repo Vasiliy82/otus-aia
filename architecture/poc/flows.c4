@@ -7,9 +7,11 @@ views {
       User → Guardrails → GraphRAG → LLM.
 
       Полный pipeline (backend/graph/workflow.py):
-      input_guardrails → classify_intent → vector_retrieve
+      input_guardrails → classify_intent
+      → [risk_analysis: financial_lookup] → vector_retrieve
       → graph_expand → rbac_filter → rerank
       → generate_answer → output_guardrails.
+      Ветвление по intent после classify_intent.
     '
     variant sequence
 

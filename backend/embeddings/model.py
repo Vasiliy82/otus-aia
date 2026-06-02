@@ -19,7 +19,7 @@ class EmbeddingModel:
         return int(self._model.get_embedding_dimension())
 
     def encode(self, texts: list[str]) -> np.ndarray:
-        vectors = self._model.encode(texts, normalize_embeddings=True)
+        vectors = self._model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
         return np.asarray(vectors, dtype=np.float32)
 
     def encode_one(self, text: str) -> list[float]:

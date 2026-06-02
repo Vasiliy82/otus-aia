@@ -33,11 +33,15 @@ Accepted
 
 ## Decision
 
-Использовать **LangGraph** с явным `State` и следующими узлами:
+Использовать **LangGraph** с явным `State` и узлами:
 
-`input_guardrails` → `classify_intent` → `vector_retrieve` → `graph_expand` → `rbac_filter` → `rerank` → `generate_answer` → `output_guardrails`
+- `input_guardrails` → (blocked → `blocked_end` | ok → `classify_intent`)
+- `classify_intent` → маршрутизация по `intent`:
+  - `risk_analysis` → `financial_lookup` → `vector_retrieve`
+  - `compliance` / `general` → `vector_retrieve` (для compliance в state задаётся `search_scope=compliance`)
+- общая цепочка: `vector_retrieve` → `graph_expand` → `rbac_filter` → `rerank` → `generate_answer` → `output_guardrails`
 
-Каждый узел логирует свой результат с `trace_id`. Ветвление реализовано через conditional edges LangGraph.
+Каждый узел логирует свой результат с `trace_id`. Ветвление реализовано через conditional edges LangGraph (`_blocked_route`, `_intent_route`).
 
 ## Consequences
 

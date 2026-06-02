@@ -27,6 +27,7 @@ class AskResponse(BaseModel):
     reason: str | None = None
     audit_steps: list[str] = Field(default_factory=list)
     intent: str | None = None
+    financial_facts: dict | None = None
 
 
 class HealthResponse(BaseModel):
@@ -50,4 +51,5 @@ def state_to_response(state: dict[str, Any]) -> AskResponse:
         reason=state.get("block_reason"),
         audit_steps=list(state.get("audit_steps") or []),
         intent=state.get("intent"),
+        financial_facts=state.get("financial_facts"),
     )

@@ -41,6 +41,8 @@ class AskState(TypedDict, total=False):
     block_reason: str | None
     intent: str | None
     demo_inn: str | None
+    financial_facts: dict[str, Any] | None
+    search_scope: str | None
     retrieved_chunks: list[ChunkContext]
     expanded_nodes: list[GraphNodeContext]
     context_chunks: list[ChunkContext]
