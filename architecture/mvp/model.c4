@@ -1,16 +1,35 @@
 model {
 
+  // ─── Акторы ───────────────────────────────────────────────────────────────
+
   creditAnalyst = actor 'Кредитный аналитик' {
     description 'Сотрудник банка, анализирует кредитные риски компаний'
-    -> aiAssistant                   'использует систему'
-    -> aiAssistant.apiGateway        'HTTPS запрос'
-    -> aiAssistant.apiGateway.apiLayer 'POST /ask {query, role}'
+    -> creditPlatform                            'использует систему'
+    -> creditPlatform.graphragRuntime.apiGateway 'HTTPS запрос'
+    -> creditPlatform.graphragRuntime.apiGateway.apiLayer 'POST /ask {query, role}'
   }
 
   complianceOfficer = actor 'Сотрудник комплаенс' {
     description 'Проверяет соответствие запросов и ответов системы'
-    -> aiAssistant 'аудит и мониторинг'
+    -> creditPlatform                  'аудит и мониторинг'
+    -> creditPlatform.security         'просмотр audit log, политик доступа'
   }
+
+  mlEngineer = actor 'ML / MLOps инженер' {
+    description '
+      Отвечает за качество моделей, эксперименты, версионирование
+      LLM / embeddings / reranker и регрессионные прогоны.
+    '
+    -> creditPlatform.aiQuality 'эксперименты, регрессия, реестр моделей'
+  }
+
+  platformOps = actor 'SRE / DevOps инженер' {
+    description 'Эксплуатация платформы: наблюдаемость, релизы, бэкапы.'
+    -> creditPlatform.observability 'мониторинг, алерты, восстановление'
+    -> deliveryPlatform             'релизы и откаты'
+  }
+
+  // ─── Внешние системы ────────────────────────────────────────────────────────
 
   legalCorpus = external-system 'Нормативная база банка' {
     description '
@@ -20,135 +39,353 @@ model {
     '
   }
 
-  aiAssistant = system 'AI-ассистент кредитного аналитика' {
+  financialSources = external-system 'Источники финансовой отчётности' {
     description '
-      Production-ready Secure GraphRAG система для банка.
-      Self-hosted Qwen + Neo4j + Qdrant + HashiCorp Vault + OTel.
-      Целевая архитектура MVP (Q1-Q3 2027).
+      Внешние и внутренние источники финансовой отчётности контрагентов
+      (РСБУ/МСФО, СПАРК-подобные витрины, внутренние выгрузки).
+    '
+  }
+
+  corporateIam = external-system 'Корпоративная IAM / SSO' {
+    description '
+      Корпоративный провайдер идентификации (Active Directory / OIDC).
+      Источник пользователей и ролей для RBAC платформы.
+    '
+    -[async]-> creditPlatform.security.opa 'роли пользователей (OIDC)'
+  }
+
+  // ─── AI-платформа кредитного анализа ─────────────────────────────────────────
+
+  creditPlatform = system 'AI-платформа кредитного анализа' {
+    description '
+      Production-ready Secure GraphRAG платформа банка.
+      Единая система с подсистемами: рабочий контур, пополнение базы знаний,
+      качество и MLOps, безопасность и доступ, наблюдаемость и надёжность.
+      Self-hosted Qwen (vLLM) + Triton (embeddings/reranker) + Neo4j + Qdrant
+      + HashiCorp Vault + OTel. Целевая архитектура MVP (Q1-Q3 2027).
     '
 
-    // ─── API Gateway ──────────────────────────────────────────────────────
+    // ═══ Подсистема 1: Secure GraphRAG Runtime ════════════════════════════════
 
-    apiGateway = container 'FastAPI Backend' {
-      technology 'Python 3.11, FastAPI, uvicorn'
-      description 'REST API + LangGraph workflow оркестратор'
-      icon tech:python
-
-      apiLayer = component 'API Layer' {
-        technology 'FastAPI'
-        description '
-          POST /ask — {query, role} → {answer, citations, trace_id, blocked}.
-          GET /health · GET /metrics.
-          mTLS от DMZ.
-        '
-        -> langGraph 'invoke(state)'
-      }
-
-      langGraph = component 'LangGraph Workflow' {
-        technology 'LangGraph'
-        description '
-          StateGraph оркестратор:
-          input_guardrails → vector_retrieve → graph_expand
-          → rbac_filter → rerank → generate_answer → output_guardrails.
-          Трассировка через OpenTelemetry.
-        '
-        -> guardrails   'проверка входа / выхода'
-        -> retrieval    'hybrid retrieval'
-        -> rbac         'rbac_filter'
-        -> reranker     'cross-encoder rerank'
-        -> llmClient    'generate_answer'
-      }
-
-      guardrails = component 'Guardrails' {
-        technology 'Python + LLM-guard'
-        description '
-          Input: prompt injection, PII detection, стоп-паттерны.
-          Output: валидация citations, галлюцинации.
-        '
-      }
-
-      retrieval = component 'Retrieval' {
-        technology 'Qdrant + Neo4j Cypher'
-        description '
-          Гибридный поиск: dense (Qdrant) + sparse (BM25) →
-          graph expand по Neo4j (Cypher 1-2 hop) →
-          слияние контекста.
-        '
-        -> embeddings            'encode query'
-        -> aiAssistant.qdrant    'dense vector search'
-        -> aiAssistant.neo4j     'Cypher graph expand'
-      }
-
-      rbac = component 'RBAC Filter' {
-        technology 'PostgreSQL + OPA'
-        description '
-          Chunk-level RBAC: allowed_roles из PostgreSQL,
-          политики через Open Policy Agent.
-          ADR-006.
-        '
-        -> aiAssistant.postgres 'check allowed_roles'
-      }
-
-      reranker = component 'Reranker' {
-        technology 'CrossEncoder (sentence-transformers)'
-        description '
-          Cross-encoder rerank: score(query, chunk).
-          Точнее детерминированной формулы PoC.
-        '
-        -> embeddings 'cross-encode pairs'
-      }
-
-      llmClient = component 'LLM Client' {
-        technology 'OpenAI-compatible API (vLLM)'
-        description '
-          Клиент к self-hosted Qwen через vLLM OpenAI API.
-          Streaming, retry, timeout.
-          ADR-003, ADR-007.
-        '
-        -> aiAssistant.vllm 'POST /v1/chat/completions'
-      }
-
-      embeddings = component 'Embeddings' {
-        technology 'sentence-transformers / GPU'
-        description '
-          Многоязычная модель (dim=768+).
-          Runtime: encode query.
-          Batch: make embed-chunks (GPU-accelerated).
-        '
-      }
-
-      indexing = component 'Indexing CLI' {
-        technology 'Python CLI + LangChain splitter'
-        description '
-          ETL для нормативного корпуса:
-          split → embed → upsert Qdrant + Neo4j + PG.
-        '
-        -> embeddings           'encode chunks'
-        -> aiAssistant.qdrant   'upsert vectors'
-        -> aiAssistant.neo4j    'upsert graph nodes/edges'
-        -> aiAssistant.postgres 'upsert chunk metadata + RBAC'
-      }
-    }
-
-    // ─── LLM ──────────────────────────────────────────────────────────────
-
-    vllm = container 'vLLM Server (Qwen)' {
-      technology 'vLLM, Qwen2.5-72B, CUDA'
+    graphragRuntime = subsystem 'Secure GraphRAG Runtime' {
       description '
-        Self-hosted LLM на GPU-сервере (24+ ГБ VRAM).
-        OpenAI-compatible API.
-        Закупка GPU Q1 2027. ADR-003, ADR-007.
+        Production online-контур: принимает вопрос аналитика, ищет контекст,
+        расширяет через граф, фильтрует по ролям, ранжирует и вызывает LLM.
+        FastAPI строго I/O-bound; тяжёлый инференс изолирован в vLLM и Triton.
       '
+
+      apiGateway = container 'FastAPI Backend (API Gateway)' {
+        technology 'Python 3.11, FastAPI, uvicorn, gRPC client'
+        description 'REST API + LangGraph оркестратор. Строго I/O-bound, без локального инференса. ADR-008.'
+        icon tech:python
+
+        apiLayer = component 'API Layer' {
+          technology 'FastAPI'
+          description '
+            POST /ask — {query, role} → {answer, citations, trace_id, blocked}.
+            GET /health · GET /metrics.
+            mTLS от DMZ.
+          '
+          -> langGraph 'invoke(state)'
+        }
+
+        langGraph = component 'LangGraph Workflow' {
+          technology 'LangGraph'
+          description '
+            StateGraph оркестратор:
+            input_guardrails → vector_retrieve → graph_expand
+            → rrf_fusion → rbac_filter → rerank → generate_answer
+            → output_guardrails.
+            Трассировка через OpenTelemetry. ADR-005.
+          '
+          -> guardrails    'проверка входа / выхода'
+          -> retrieval     'hybrid retrieval (dense + graph)'
+          -> fusion        'RRF rank fusion'
+          -> rbac          'rbac_filter'
+          -> reranker      'cross-encoder rerank'
+          -> llmClient     'generate_answer'
+        }
+
+        guardrails = component 'Guardrails' {
+          technology 'Python + LLM-guard'
+          description '
+            Input: prompt injection, PII detection, стоп-паттерны.
+            Output: валидация citations, галлюцинации.
+          '
+        }
+
+        retrieval = component 'Retrieval' {
+          technology 'Qdrant + Neo4j Cypher'
+          description '
+            Гибридный поиск:
+            - dense (Qdrant, top-k) — ранжированный список;
+            - graph expand (Neo4j Cypher, 1-2 hop) — ранжированный список.
+            Возвращает два независимых ранжированных списка для RRF.
+          '
+          -> embeddingClient            'encode query (gRPC)'
+          -> creditPlatform.qdrant      'dense vector search'
+          -> creditPlatform.neo4j       'Cypher graph expand'
+          -> fusion                     'dense list + graph list'
+        }
+
+        fusion = component 'RRF Fusion' {
+          technology 'Reciprocal Rank Fusion (k≈60)'
+          description '
+            Ранговое слияние dense- и graph-списков по позициям:
+            score = Σ 1/(k + rank_i).
+            Нивелирует разницу шкал (cosine vs дискретный graph-score),
+            заменяет эвристику vector + 0.5·graph. ADR-009.
+          '
+        }
+
+        rbac = component 'RBAC Filter' {
+          technology 'PostgreSQL + OPA'
+          description '
+            Chunk-level RBAC: allowed_roles из PostgreSQL,
+            политики через Open Policy Agent (подсистема Security).
+            ADR-006.
+          '
+          -> creditPlatform.postgres        'check allowed_roles'
+          -> creditPlatform.security.opa    'evaluate policy'
+        }
+
+        reranker = component 'Reranker' {
+          technology 'Cross-Encoder (через Triton, gRPC)'
+          description '
+            Cross-encoder rerank top-N: score(query, chunk) на основе
+            глубокого внимания. Финальный порядок контекста перед генерацией.
+            Инференс изолирован в Triton. ADR-008, ADR-009.
+          '
+          -> rerankClient 'rerank pairs (gRPC)'
+        }
+
+        embeddingClient = component 'Embedding Client' {
+          technology 'gRPC client'
+          description '
+            Тонкий gRPC-клиент к Triton: encode(query) → dense-вектор.
+            Не загружает PyTorch-веса в процесс FastAPI. ADR-008.
+          '
+          -[grpc]-> creditPlatform.graphragRuntime.inferenceServer 'Embed (gRPC)'
+        }
+
+        rerankClient = component 'Rerank Client' {
+          technology 'gRPC client'
+          description '
+            Тонкий gRPC-клиент к Triton: score(query, chunk) cross-encoder.
+            Инференс вне процесса FastAPI. ADR-008.
+          '
+          -[grpc]-> creditPlatform.graphragRuntime.inferenceServer 'Rerank (gRPC)'
+        }
+
+        llmClient = component 'LLM Client' {
+          technology 'OpenAI-compatible API (vLLM)'
+          description '
+            Клиент к self-hosted Qwen через vLLM OpenAI API.
+            Streaming, retry, timeout.
+            ADR-003, ADR-007.
+          '
+          -> creditPlatform.graphragRuntime.vllm 'POST /v1/chat/completions'
+        }
+      }
+
+      vllm = container 'vLLM Server (Qwen)' {
+        technology 'vLLM, Qwen2.5-72B, CUDA'
+        description '
+          Self-hosted LLM на GPU-сервере (24+ ГБ VRAM).
+          OpenAI-compatible API. Изолированный inference генерации.
+          Закупка GPU Q1 2027. ADR-003, ADR-007, ADR-008.
+        '
+      }
+
+      inferenceServer = container 'Triton Inference Server' {
+        technology 'NVIDIA Triton, gRPC, CUDA'
+        description '
+          Изолированный GPU-сервер инференса embeddings + cross-encoder reranker.
+          Динамический батчинг, конкурентные инстансы моделей.
+          Снимает CPU/GIL-боттлнек с FastAPI. ADR-008.
+        '
+      }
     }
 
-    // ─── Хранилища ────────────────────────────────────────────────────────
+    // ═══ Подсистема 2: Knowledge Ingestion Pipeline ═══════════════════════════
+
+    ingestion = subsystem 'Knowledge Ingestion Pipeline' {
+      description '
+        Offline/batch-контур пополнения базы знаний: документы → чанки →
+        эмбеддинги (Triton) → граф → upsert в Qdrant / Neo4j / PostgreSQL.
+        Отделён от online-runtime по нагрузке, релизам и ответственности.
+      '
+
+      etlOrchestrator = container 'Airflow / ETL Worker' {
+        technology 'Python, Apache Airflow'
+        description '
+          DAG индексации нормативного корпуса и финансовой отчётности.
+          Согласованный с Дирекцией права процесс.
+        '
+        -> creditPlatform.minio       'download source documents'
+        -[async]-> legalCorpus        'fetch normative documents'
+        -[async]-> financialSources   'fetch financial reports'
+        -> docParsers                 'parse documents'
+      }
+
+      docParsers = container 'Document Parsers' {
+        technology 'PDF / DOCX / XLSX, layout parser'
+        description 'Извлечение текста и структуры из исходных документов.'
+        -> chunker 'clean text + layout'
+      }
+
+      chunker = container 'Chunker + Metadata Extractor' {
+        technology 'LangChain splitter'
+        description 'Разбиение на чанки, извлечение метаданных и allowed_roles.'
+        -> batchEmbeddings 'chunks'
+        -> graphEnrichment 'chunks + entities'
+      }
+
+      batchEmbeddings = container 'Batch Embeddings Job' {
+        technology 'gRPC client → Triton'
+        description '
+          Пакетная векторизация чанков через Triton (GPU, динамический батчинг).
+          Без локальной загрузки модели. ADR-008.
+        '
+        -[grpc]-> creditPlatform.graphragRuntime.inferenceServer 'Embed batch (gRPC)'
+        -> creditPlatform.qdrant   'upsert vectors'
+        -> creditPlatform.postgres 'upsert chunk metadata + RBAC'
+      }
+
+      graphEnrichment = container 'Graph Enrichment' {
+        technology 'Python, Neo4j driver'
+        description '
+          Построение узлов/рёбер графа знаний:
+          Chunk, Document, Company, Risk, Law; BELONGS_TO, MENTIONS, LINKED_TO.
+        '
+        -> creditPlatform.neo4j 'upsert nodes/edges'
+      }
+    }
+
+    // ═══ Подсистема 3: AI Quality & MLOps ═════════════════════════════════════
+
+    aiQuality = subsystem 'AI Quality & MLOps' {
+      description '
+        Контур качества и жизненного цикла моделей: golden set, регрессионные
+        прогоны, реестр моделей и промптов, gate перед релизом.
+      '
+
+      evalRunner = container 'Evaluation Runner' {
+        technology 'RAGAS, DeepEval, promptfoo'
+        description '
+          Прогоны качества: faithfulness, context recall, grounding, формат,
+          безопасность, latency. Сравнение baseline / new version.
+        '
+        -> goldenSet                                        'load golden set'
+        -> creditPlatform.graphragRuntime.apiGateway        'replay queries'
+        -> mlflow                                           'log metrics'
+      }
+
+      goldenSet = container 'Golden Set' {
+        technology 'Версионированные датасеты (DVC/Git LFS)'
+        description 'Эталонные пары вопрос-ответ и тестовые запросы для регрессии.'
+      }
+
+      mlflow = container 'MLflow Tracking + Model Registry' {
+        technology 'MLflow'
+        description '
+          Версии LLM / embeddings / reranker, метрики экспериментов,
+          статусы Staging / Production / Archived, model cards.
+        '
+        -> deliveryPlatform 'promote model version'
+      }
+
+      promptRegistry = container 'Prompt Registry' {
+        technology 'Git-backed registry'
+        description 'Версионирование системных промптов и инструкций по citations.'
+      }
+    }
+
+    // ═══ Подсистема 4: Security & Access Control ══════════════════════════════
+
+    security = subsystem 'Security & Access Control' {
+      description '
+        Сквозная подсистема безопасности: секреты, политики доступа, аудит.
+        Часть логики используется RBAC Filter и Guardrails рантайма.
+      '
+
+      vault = container 'HashiCorp Vault' {
+        technology 'HashiCorp Vault'
+        description '
+          Управление секретами: DB credentials, API keys, TLS / mTLS certs.
+          Заменяет .env PoC. ADR-007.
+        '
+      }
+
+      opa = container 'OPA Policy Engine' {
+        technology 'Open Policy Agent'
+        description 'Политики доступа: какие роли видят какие чанки. ADR-006.'
+      }
+
+      auditLog = container 'Audit Log' {
+        technology 'PostgreSQL + append-only store'
+        description 'Аудиторский след запросов и решений RBAC по trace_id.'
+        -> creditPlatform.postgres 'persist audit records'
+      }
+    }
+
+    // ═══ Подсистема 5: Observability & Reliability ════════════════════════════
+
+    observability = subsystem 'Observability & Reliability' {
+      description '
+        Метрики, логи, трассировки, алерты, бэкапы и восстановление.
+        Эксплуатационная зрелость платформы.
+      '
+
+      otelCollector = container 'OTel Collector' {
+        technology 'OpenTelemetry Collector'
+        description 'Агрегирует трейсы, метрики, логи от всех сервисов. ADR-007.'
+        -> jaeger     'export traces'
+        -> prometheus 'export metrics'
+      }
+
+      jaeger = container 'Jaeger' {
+        technology 'Jaeger'
+        description '
+          Распределённая трассировка. Drill-down по trace_id
+          от API через retrieval/rerank (Triton) до LLM (vLLM).
+        '
+      }
+
+      prometheus = container 'Prometheus + Grafana' {
+        technology 'Prometheus, Grafana'
+        description 'Метрики: latency, throughput, GPU utilization, error rate.'
+        -> alertmanager 'fire alerts'
+      }
+
+      alertmanager = container 'Alertmanager' {
+        technology 'Alertmanager / PagerDuty'
+        description 'Алерты при деградации latency, ошибках инференса, насыщении GPU.'
+      }
+
+      backupScheduler = container 'Backup Scheduler' {
+        technology 'CronJob / Velero'
+        description 'Регулярные бэкапы PostgreSQL, Qdrant, Neo4j, MinIO.'
+        -> backupStorage           'store snapshots'
+        -[async]-> creditPlatform.postgres 'backup'
+        -[async]-> creditPlatform.qdrant   'backup'
+        -[async]-> creditPlatform.neo4j    'backup'
+      }
+
+      backupStorage = container 'Backup Storage' {
+        technology 'Object storage (offsite)'
+        description 'Хранилище снимков для восстановления (DR runbooks).'
+      }
+    }
+
+    // ═══ Общие хранилища платформы ════════════════════════════════════════════
 
     qdrant = database 'Qdrant Cluster' {
       technology 'Qdrant, HNSW'
       description '
         Векторная БД: dense embeddings (dim=768+),
         HNSW индекс, косинусное расстояние.
-        Заменяет pgvector PoC. ADR-007.
+        Заменяет pgvector PoC. ADR-004, ADR-007.
       '
     }
 
@@ -171,66 +408,84 @@ model {
       icon tech:postgresql
     }
 
-    // ─── Инфраструктура ───────────────────────────────────────────────────
-
-    vault = container 'HashiCorp Vault' {
-      technology 'HashiCorp Vault'
-      description '
-        Управление секретами: DB credentials, API keys, TLS certs.
-        Заменяет .env PoC. ADR-007.
-      '
-    }
-
     minio = container 'MinIO' {
       technology 'MinIO S3-compatible'
       description '
-        Объектное хранилище документов нормативного корпуса.
+        Объектное хранилище документов нормативного корпуса (raw zone).
         Исходные PDF/DOCX перед индексацией.
       '
     }
 
-    // ─── Observability ────────────────────────────────────────────────────
+  }
 
-    otelCollector = container 'OTel Collector' {
-      technology 'OpenTelemetry Collector'
-      description '
-        Агрегирует трейсы, метрики, логи от всех сервисов.
-        ADR-007.
-      '
-      -> aiAssistant.jaeger     'export traces'
-      -> aiAssistant.prometheus 'export metrics'
+  // ─── Внешние platform / governance системы ───────────────────────────────────
+
+  deliveryPlatform = system 'Delivery & Release Platform' {
+    description '
+      CI/CD платформа банка: сборка, тесты, quality gates, выкатка кода и
+      ML-артефактов (образы, версии моделей, промпты), canary и rollback.
+    '
+
+    gitRepo = container 'Git Repository' {
+      technology 'Git'
+      description 'Исходный код, IaC, манифесты деплоя, Architecture-as-Code.'
     }
 
-    jaeger = container 'Jaeger' {
-      technology 'Jaeger'
-      description '
-        Распределённая трассировка запросов.
-        Drill-down по trace_id от API до LLM.
-      '
+    ciRunner = container 'CI Runner' {
+      technology 'GitHub Actions / GitLab CI'
+      description 'Unit / integration / security tests + GenAI quality gates.'
+      -> gitRepo            'checkout'
+      -> containerRegistry  'push images'
     }
 
-    prometheus = container 'Prometheus + Grafana' {
-      technology 'Prometheus, Grafana'
-      description '
-        Метрики: latency, throughput, GPU utilization, error rate.
-        Алерты при деградации.
-      '
+    containerRegistry = container 'Container Registry' {
+      technology 'OCI registry'
+      description 'Образы FastAPI, vLLM, Triton, ETL.'
     }
 
-    // ─── ETL ──────────────────────────────────────────────────────────────
+    cdController = container 'CD Controller' {
+      technology 'Argo CD / Flux'
+      description 'GitOps-выкатка: canary / blue-green, rollback кода и моделей.'
+      -> containerRegistry 'pull images'
+      -> creditPlatform    'deploy / rollback'
+    }
+  }
 
-    etlPipeline = container 'ETL Pipeline' {
-      technology 'Python, Apache Airflow (опц.)'
-      description '
-        Загрузка и индексация нормативного корпуса:
-        PDF/DOCX → split → embed → Qdrant + Neo4j + PG.
-        Согласованный с Дирекцией права процесс.
-      '
-      -> minio      'download source documents'
-      -> legalCorpus 'fetch normative documents'
-      -> aiAssistant.apiGateway.indexing 'trigger indexing'
+  archGovernance = system 'Architecture as Code' {
+    description '
+      Контур архитектурного управления: версионируемая as-is/to-be модель,
+      ADR, линтеры и fitness functions, автогенерация диаграмм, сравнение
+      фактических трейсов с запланированной архитектурой.
+    '
+
+    archRepo = container 'Architecture Repository' {
+      technology 'Git, LikeC4 DSL'
+      description 'Исходники Like C4 моделей PoC и MVP, ADR-журнал.'
     }
 
+    adrRepo = container 'ADR Repository' {
+      technology 'Markdown ADR'
+      description 'Журнал архитектурных решений (000–010).'
+    }
+
+    diagramRenderer = container 'Diagram Renderer' {
+      technology 'LikeC4 CLI + Playwright'
+      description 'Автогенерация PNG-диаграмм из DSL в docs/diagrams.'
+      -> archRepo 'read models'
+    }
+
+    archLinter = container 'Architecture Linter / Fitness Functions' {
+      technology 'LikeC4 checks + custom rules'
+      description 'Проверки правил архитектуры и PR/MR quality gate.'
+      -> archRepo 'validate model'
+    }
+
+    asIsBuilder = container 'As-Is Builder' {
+      technology 'OTel trace importer'
+      description 'Строит as-is модель из трейсов и сравнивает с to-be.'
+      -[async]-> creditPlatform.observability.jaeger 'import traces'
+      -> archRepo                                    'compare as-is / to-be'
+    }
   }
 
 }

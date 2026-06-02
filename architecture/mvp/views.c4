@@ -3,103 +3,297 @@ views {
   // ─── Стартовая страница ──────────────────────────────────────────────────
 
   view index {
-    title 'MVP: AI-ассистент кредитного аналитика'
+    title 'MVP: AI-платформа кредитного анализа'
     description '
-      Целевая Production архитектура MVP.
-      Self-hosted Qwen + Neo4j + Qdrant + HashiCorp Vault + OTel.
+      Целевая Production-архитектура MVP как единая платформа с подсистемами.
+      Secure GraphRAG Runtime (FastAPI I/O + vLLM + Triton),
+      Knowledge Ingestion, AI Quality & MLOps, Security, Observability.
+      8 представлений: landscape, контейнеры подсистем, sequence, ER, deployment.
       Q1-Q3 2027. Зависит от GO-решения ТехКома по PoC.
-
-      Дополнительно: mvp_ask_sequence, mvp_er_*, mvp_deployment.
     '
     include *
-    style aiAssistant {
+    style creditPlatform {
       size large
     }
   }
 
-  // ─── L1: System Context ──────────────────────────────────────────────────
+  // ─── View 1: C1 — System Landscape ─────────────────────────────────────────
 
-  view mvp_context of aiAssistant {
-    title 'MVP: L1 — System Context'
+  view mvp_landscape {
+    title 'MVP: 1 — System Landscape (C1)'
     description '
-      Контекст системы: аналитик, комплаенс,
-      нормативная база банка.
+      Ландшафт AI-платформы кредитного анализа: акторы, продуктовая платформа,
+      внешние системы (нормативная база, источники отчётности, IAM/SSO) и
+      platform/governance-системы (Delivery & Release, Architecture as Code).
     '
     include
-      *,
       creditAnalyst,
       complianceOfficer,
-      legalCorpus
+      mlEngineer,
+      platformOps,
+      legalCorpus,
+      financialSources,
+      corporateIam,
+      creditPlatform,
+      deliveryPlatform,
+      archGovernance
+
+    style creditPlatform {
+      size large
+    }
   }
 
-  // ─── L2: Containers ──────────────────────────────────────────────────────
+  // ─── View 2 (обзор): C2 — подсистемы платформы ──────────────────────────────
 
-  view mvp_container of aiAssistant {
-    title 'MVP: L2 — Containers'
+  view mvp_container of creditPlatform {
+    title 'MVP: 2 — Platform Subsystems (C2)'
     description '
-      Контейнеры MVP:
-      FastAPI Backend, vLLM (Qwen), Neo4j, Qdrant, PostgreSQL,
-      HashiCorp Vault, MinIO, Observability, ETL Pipeline.
+      Подсистемы платформы: Secure GraphRAG Runtime, Knowledge Ingestion,
+      AI Quality & MLOps, Security & Access Control, Observability & Reliability,
+      общие хранилища (Qdrant, Neo4j, PostgreSQL, MinIO).
     '
     include
       *,
       creditAnalyst,
       complianceOfficer,
-      legalCorpus
+      mlEngineer,
+      platformOps,
+      legalCorpus,
+      financialSources,
+      corporateIam,
+      deliveryPlatform,
+      archGovernance
 
-    style aiAssistant {
+    style creditPlatform {
+      opacity 0%
+    }
+    style creditAnalyst, complianceOfficer, mlEngineer, platformOps {
+      size sm
+    }
+    style legalCorpus, financialSources, corporateIam, deliveryPlatform, archGovernance {
+      size sm
+    }
+  }
+
+  // ─── View 3: Container — Secure GraphRAG Runtime ────────────────────────────
+
+  view mvp_runtime of creditPlatform.graphragRuntime {
+    title 'MVP: 3 — Secure GraphRAG Runtime'
+    description '
+      Production online-контур запроса:
+      FastAPI (I/O-bound) → vLLM (генерация) + Triton (embeddings/reranker, gRPC),
+      Qdrant + Neo4j + PostgreSQL, OPA.
+      Тяжёлый инференс изолирован от API-шлюза. ADR-008.
+    '
+    include
+      *,
+      creditAnalyst,
+      creditPlatform.qdrant,
+      creditPlatform.neo4j,
+      creditPlatform.postgres,
+      creditPlatform.security.opa
+
+    style creditPlatform.graphragRuntime {
+      opacity 0%
+    }
+    style creditAnalyst {
+      size sm
+    }
+    style creditPlatform.qdrant, creditPlatform.neo4j, creditPlatform.postgres, creditPlatform.security.opa {
+      size sm
+    }
+  }
+
+  // ─── View 4: Container — Knowledge Ingestion Pipeline ───────────────────────
+
+  view mvp_ingestion of creditPlatform.ingestion {
+    title 'MVP: 4 — Knowledge Ingestion Pipeline'
+    description '
+      Offline/batch-контур: документы → парсинг → чанкинг →
+      batch embeddings (Triton, gRPC) → graph enrichment →
+      upsert в Qdrant / Neo4j / PostgreSQL.
+    '
+    include
+      *,
+      legalCorpus,
+      financialSources,
+      creditPlatform.minio,
+      creditPlatform.qdrant,
+      creditPlatform.neo4j,
+      creditPlatform.postgres,
+      creditPlatform.graphragRuntime.inferenceServer
+
+    style creditPlatform.ingestion {
+      opacity 0%
+    }
+    style legalCorpus, financialSources {
+      size sm
+    }
+    style creditPlatform.minio, creditPlatform.qdrant, creditPlatform.neo4j, creditPlatform.postgres, creditPlatform.graphragRuntime.inferenceServer {
+      size sm
+    }
+  }
+
+  // ─── View 5: AI Quality & MLOps ─────────────────────────────────────────────
+
+  view mvp_quality_mlops of creditPlatform.aiQuality {
+    title 'MVP: 5 — AI Quality & MLOps'
+    description '
+      Контур качества и MLOps: golden set, Evaluation Runner (RAGAS/DeepEval/promptfoo),
+      MLflow Tracking + Model Registry, Prompt Registry, gate перед релизом.
+    '
+    include
+      *,
+      mlEngineer,
+      creditPlatform.graphragRuntime.apiGateway,
+      deliveryPlatform
+
+    style creditPlatform.aiQuality {
+      opacity 0%
+    }
+    style mlEngineer {
+      size sm
+    }
+    style creditPlatform.graphragRuntime.apiGateway, deliveryPlatform {
+      size sm
+    }
+  }
+
+  // ─── View 6: CI/CD & Release ────────────────────────────────────────────────
+
+  view mvp_cicd of deliveryPlatform {
+    title 'MVP: 6 — Delivery & Release Platform'
+    description '
+      CI/CD: Git → CI Runner (tests + GenAI quality gates) → Container Registry →
+      CD Controller (canary / rollback). Два типа артефактов: код и ML-артефакты
+      (образы, версии моделей из MLflow, промпты).
+    '
+    include
+      *,
+      platformOps,
+      creditPlatform,
+      creditPlatform.aiQuality.mlflow
+
+    style deliveryPlatform {
+      opacity 0%
+    }
+    style platformOps {
+      size sm
+    }
+    style creditPlatform, creditPlatform.aiQuality.mlflow {
+      size sm
+    }
+  }
+
+  // ─── View 7: Observability, Backup & Restore ────────────────────────────────
+
+  view mvp_observability of creditPlatform.observability {
+    title 'MVP: 7 — Observability & Reliability'
+    description '
+      OTel Collector → Jaeger (traces) + Prometheus/Grafana (metrics) → Alertmanager.
+      Backup Scheduler → Backup Storage (DR runbooks).
+      Мониторинг latency, throughput, GPU utilization, error rate.
+    '
+    include
+      *,
+      platformOps,
+      creditPlatform.graphragRuntime.apiGateway,
+      creditPlatform.graphragRuntime.vllm,
+      creditPlatform.graphragRuntime.inferenceServer,
+      creditPlatform.postgres,
+      creditPlatform.qdrant,
+      creditPlatform.neo4j
+
+    style creditPlatform.observability {
+      opacity 0%
+    }
+    style platformOps {
+      size sm
+    }
+    style creditPlatform.graphragRuntime.apiGateway, creditPlatform.graphragRuntime.vllm, creditPlatform.graphragRuntime.inferenceServer, creditPlatform.postgres, creditPlatform.qdrant, creditPlatform.neo4j {
+      size sm
+    }
+  }
+
+  // ─── View 8: Security & Access Control ──────────────────────────────────────
+
+  view mvp_security of creditPlatform.security {
+    title 'MVP: 8 — Security & Access Control'
+    description '
+      Trust boundaries: Vault (секреты), OPA (политики), Audit Log.
+      Интеграция с корпоративной IAM/SSO. Используется RBAC Filter рантайма
+      и PostgreSQL allowed_roles. ADR-006.
+    '
+    include
+      *,
+      creditAnalyst,
+      complianceOfficer,
+      corporateIam,
+      creditPlatform.graphragRuntime.apiGateway,
+      creditPlatform.postgres
+
+    style creditPlatform.security {
       opacity 0%
     }
     style creditAnalyst, complianceOfficer {
       size sm
     }
-    style legalCorpus {
+    style corporateIam, creditPlatform.graphragRuntime.apiGateway, creditPlatform.postgres {
+      size sm
+    }
+  }
+
+  // ─── View 9: Architecture as Code ───────────────────────────────────────────
+
+  view mvp_arch_as_code of archGovernance {
+    title 'MVP: 9 — Architecture as Code'
+    description '
+      Контур архитектурного управления: Architecture Repository (Like C4),
+      ADR Repository, Diagram Renderer, Architecture Linter / fitness functions,
+      As-Is Builder (импорт трейсов и сравнение as-is / to-be).
+    '
+    include
+      *,
+      creditPlatform,
+      creditPlatform.observability.jaeger
+
+    style archGovernance {
+      opacity 0%
+    }
+    style creditPlatform, creditPlatform.observability.jaeger {
       size sm
     }
   }
 
   // ─── L3: Backend Components ──────────────────────────────────────────────
 
-  view mvp_component of aiAssistant.apiGateway {
+  view mvp_component of creditPlatform.graphragRuntime.apiGateway {
     title 'MVP: L3 — Backend Components'
     description '
-      Компоненты FastAPI backend MVP:
-      LangGraph workflow, hybrid retrieval (Qdrant + Neo4j),
-      RBAC + OPA, CrossEncoder rerank, LLM Client, Indexing CLI.
+      Компоненты FastAPI backend (I/O-bound):
+      LangGraph workflow, hybrid retrieval (Qdrant + Neo4j), RRF Fusion,
+      RBAC + OPA, cross-encoder rerank, gRPC-клиенты embeddings/rerank к Triton,
+      LLM Client к vLLM.
     '
     include
       *,
-      aiAssistant.qdrant,
-      aiAssistant.neo4j,
-      aiAssistant.postgres,
-      aiAssistant.vllm,
+      creditPlatform.qdrant,
+      creditPlatform.neo4j,
+      creditPlatform.postgres,
+      creditPlatform.graphragRuntime.vllm,
+      creditPlatform.graphragRuntime.inferenceServer,
+      creditPlatform.security.opa,
       creditAnalyst
 
-    style aiAssistant.apiGateway {
+    style creditPlatform.graphragRuntime.apiGateway {
       opacity 0%
     }
     style creditAnalyst {
       size sm
     }
-    style aiAssistant.qdrant, aiAssistant.neo4j, aiAssistant.postgres, aiAssistant.vllm {
+    style creditPlatform.qdrant, creditPlatform.neo4j, creditPlatform.postgres, creditPlatform.graphragRuntime.vllm, creditPlatform.graphragRuntime.inferenceServer, creditPlatform.security.opa {
       size sm
     }
-  }
-
-  // ─── L2: Observability ───────────────────────────────────────────────────
-
-  view mvp_observability {
-    title 'MVP: Observability Stack'
-    description '
-      Observability: OTel Collector → Jaeger (traces) + Prometheus/Grafana (metrics).
-      Мониторинг latency, throughput, GPU utilization, error rate.
-    '
-    include
-      aiAssistant.otelCollector,
-      aiAssistant.jaeger,
-      aiAssistant.prometheus,
-      aiAssistant.apiGateway,
-      aiAssistant.vllm
   }
 
 }

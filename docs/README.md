@@ -39,7 +39,7 @@ PoC — это **управляемый эксперимент** на огран
 |--------|------------|------|
 | Границы PoC | Сценарий, данные, что реализовано, что отложено | [poc/scope.md](poc/scope.md) |
 | Критерии приёмки | Чеклист GO/NO-GO для Технического комитета | [acceptance-criteria.md](acceptance-criteria.md) |
-| Целевая архитектура MVP | Диаграммы, sizing, roadmap | [mvp/README.md](mvp/README.md) |
+| Целевая архитектура MVP | AI-платформа кредитного анализа: подсистемы, диаграммы, roadmap | [mvp/README.md](mvp/README.md) |
 | ADR | Журнал архитектурных решений | [adr/README.md](adr/README.md) |
 | Технологический радар | Стек PoC vs MVP, план замены компонентов | [technology-radar.md](technology-radar.md) |
 | Диаграммы | C4, Sequence, ER, Deployment | [diagrams/](diagrams/) |

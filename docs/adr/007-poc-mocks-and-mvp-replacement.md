@@ -38,8 +38,9 @@ Accepted
 
 | Компонент | PoC (сейчас) | MVP / Production | Условие замены |
 |-----------|-------------|-----------------|----------------|
-| LLM | `MockLLMClient` (шаблонный ответ) | self-hosted Qwen AWQ через vLLM | После закупки GPU |
-| Reranker | детерминированная формула score | cross-encoder сервис | После найма MLOps-инженера (Q3 2026) |
+| LLM | `MockLLMClient` (шаблонный ответ) | self-hosted Qwen AWQ через vLLM (изолированный inference, gRPC) | После закупки GPU |
+| Inference embeddings/reranker | in-process sentence-transformers (CPU) | выделенный Triton Inference Server (GPU, gRPC) — ADR-008 | После закупки GPU + найма MLOps |
+| Ранжирование | детерминированная формула `vector + 0.5·graph` | RRF (Reciprocal Rank Fusion) + cross-encoder rerank — ADR-009 | После найма MLOps-инженера (Q3 2026) |
 | Graph store | PostgreSQL (таблицы) | Neo4j cluster | После найма MLOps + ИБ-аудит |
 | Векторная БД | pgvector (PostgreSQL) | Qdrant cluster | После найма MLOps (Q3 2026) |
 | OCR | подготовленные тексты | layout parser + MinIO | Отдельный проект |

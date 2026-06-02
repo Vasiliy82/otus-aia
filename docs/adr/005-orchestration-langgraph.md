@@ -39,7 +39,9 @@ Accepted
 - `classify_intent` → маршрутизация по `intent`:
   - `risk_analysis` → `financial_lookup` → `vector_retrieve`
   - `compliance` / `general` → `vector_retrieve` (для compliance в state задаётся `search_scope=compliance`)
-- общая цепочка: `vector_retrieve` → `graph_expand` → `rbac_filter` → `rerank` → `generate_answer` → `output_guardrails`
+- общая цепочка: `vector_retrieve` → `graph_expand` → `rrf_fusion` → `rbac_filter` → `rerank` → `generate_answer` → `output_guardrails`
+
+Узел `rrf_fusion` сливает dense- и graph-списки через Reciprocal Rank Fusion; узел `rerank` выполняет cross-encoder reranking top-N (ADR-009). На MVP инференс embeddings и cross-encoder вынесен из процесса FastAPI в Triton по gRPC (ADR-008) — узлы графа остаются I/O-bound.
 
 Каждый узел логирует свой результат с `trace_id`. Ветвление реализовано через conditional edges LangGraph (`_blocked_route`, `_intent_route`).
 

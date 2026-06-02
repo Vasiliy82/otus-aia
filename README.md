@@ -87,17 +87,24 @@ make arch-mvp-export
 
 Просмотр в браузере: http://localhost:5173 (PoC), http://localhost:5174 (MVP).
 
-Экспортированные PNG (после `make arch-export`):
+Экспортированные PNG (после `make arch-export`). MVP — единая платформа `creditPlatform` с подсистемами; 8 целевых представлений + детализирующие:
 
-| View ID | PoC | MVP |
-|---------|-----|-----|
-| C4 Context (L1) | `docs/diagrams/poc/poc_context.png` | `docs/diagrams/mvp/mvp_context.png` |
-| C4 Containers (L2) | `docs/diagrams/poc/poc_container.png` | `docs/diagrams/mvp/mvp_container.png` |
-| C4 Components (L3) | `docs/diagrams/poc/poc_component.png` | `docs/diagrams/mvp/mvp_component.png` |
+| View | PoC | MVP |
+|------|-----|-----|
+| System Landscape (C1) | `docs/diagrams/poc/poc_context.png` | `docs/diagrams/mvp/mvp_landscape.png` |
+| Containers / Subsystems (C2) | `docs/diagrams/poc/poc_container.png` | `docs/diagrams/mvp/mvp_container.png` |
+| Components (L3) | `docs/diagrams/poc/poc_component.png` | `docs/diagrams/mvp/mvp_component.png` |
+| Secure GraphRAG Runtime | — | `docs/diagrams/mvp/mvp_runtime.png` |
+| Knowledge Ingestion | — | `docs/diagrams/mvp/mvp_ingestion.png` |
+| AI Quality & MLOps | — | `docs/diagrams/mvp/mvp_quality_mlops.png` |
+| Delivery & Release (CI/CD) | — | `docs/diagrams/mvp/mvp_cicd.png` |
+| Observability & Reliability | — | `docs/diagrams/mvp/mvp_observability.png` |
+| Security & Access Control | — | `docs/diagrams/mvp/mvp_security.png` |
+| Architecture as Code | — | `docs/diagrams/mvp/mvp_arch_as_code.png` |
 | Sequence POST /ask | `docs/diagrams/poc/poc_ask_sequence.png` | `docs/diagrams/mvp/mvp_ask_sequence.png` |
 | ER PostgreSQL | `docs/diagrams/poc/poc_er.png` | `docs/diagrams/mvp/mvp_er_postgres.png` |
 | ER Qdrant/Neo4j | — | `docs/diagrams/mvp/mvp_er_datastores.png` |
-| Deployment CP/DP | `docs/diagrams/poc/poc_deployment.png` | `docs/diagrams/mvp/mvp_deployment.png` |
+| Deployment | `docs/diagrams/poc/poc_deployment.png` | `docs/diagrams/mvp/mvp_deployment.png` |
 
 ## Структура репозитория
 

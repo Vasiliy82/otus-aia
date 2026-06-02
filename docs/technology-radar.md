@@ -17,16 +17,18 @@
 | Технология | PoC | MVP | Условие перехода |
 |-----------|-----|-----|-----------------|
 | LLM | MockLLMClient | self-hosted Qwen AWQ (vLLM) | После закупки GPU |
-| Embedding | bge-m3 / sentence-transformers (CPU) | Выделенный embedding service | После найма MLOps |
-| Reranker | Детерминированная формула | cross-encoder service | После найма MLOps |
-| vLLM / SGLang | — | LLM Serving | После закупки GPU |
+| Embedding | bge-m3 / sentence-transformers (CPU, in-process) | модель на Triton Inference Server (GPU) | После закупки GPU + найма MLOps |
+| Reranker | Детерминированная формула `vector + 0.5·graph` | RRF + cross-encoder на Triton (GPU) | После найма MLOps |
+| Inference serving | in-process (FastAPI) | vLLM (генерация) + Triton (embeddings/reranker), gRPC — ADR-008 | После закупки GPU |
+| Слияние результатов | взвешенная сумма скоров | Reciprocal Rank Fusion (RRF) — ADR-009 | После найма MLOps |
 
 ## Оркестрация и API
 
 | Технология | PoC | MVP | Условие перехода |
 |-----------|-----|-----|-----------------|
 | LangGraph | State machine (5–8 узлов) | Расширенный граф | Остаётся |
-| FastAPI | 2–3 эндпоинта | Полный API с версионированием | Наращивается |
+| FastAPI | 2–3 эндпоинта | Полный I/O-bound API с версионированием | Наращивается |
+| Протокол к моделям | in-process вызовы | gRPC к vLLM и Triton — ADR-008 | После закупки GPU |
 | Streaming | — | SSE / WebSocket | При разработке UI |
 
 ## Безопасность и управление

@@ -3,39 +3,52 @@ deployment {
   environment prod 'Production MVP' {
     description '
       Целевое on-prem развёртывание MVP (Q1-Q3 2027).
-      DMZ, Control Plane, Data Plane, GPU Zone, Observability.
+      DMZ, Control Plane, Data Plane, Ingestion, GPU Zone, Observability.
     '
 
     zone dmz 'DMZ' {
       description 'Perimeter: API Gateway, mTLS ingress.'
-      instanceOf aiAssistant.apiGateway
+      instanceOf creditPlatform.graphragRuntime.apiGateway
     }
 
     zone controlPlane 'Control Plane' {
-      description 'Оркестрация, секреты, guardrails, RBAC logic.'
-      instanceOf aiAssistant.apiGateway
-      instanceOf aiAssistant.vault
+      description 'Оркестрация, секреты, guardrails, RBAC logic, OPA.'
+      instanceOf creditPlatform.graphragRuntime.apiGateway
+      instanceOf creditPlatform.security.vault
+      instanceOf creditPlatform.security.opa
     }
 
     zone dataPlane 'Data Plane' {
-      description 'PostgreSQL, Qdrant, Neo4j, MinIO, ETL.'
-      instanceOf aiAssistant.postgres
-      instanceOf aiAssistant.qdrant
-      instanceOf aiAssistant.neo4j
-      instanceOf aiAssistant.minio
-      instanceOf aiAssistant.etlPipeline
+      description 'PostgreSQL, Qdrant, Neo4j, MinIO.'
+      instanceOf creditPlatform.postgres
+      instanceOf creditPlatform.qdrant
+      instanceOf creditPlatform.neo4j
+      instanceOf creditPlatform.minio
+    }
+
+    zone ingestionZone 'Ingestion Zone' {
+      description 'Offline/batch ETL: Airflow, parsers, chunker, batch embeddings, graph enrichment.'
+      instanceOf creditPlatform.ingestion.etlOrchestrator
+      instanceOf creditPlatform.ingestion.docParsers
+      instanceOf creditPlatform.ingestion.chunker
+      instanceOf creditPlatform.ingestion.batchEmbeddings
+      instanceOf creditPlatform.ingestion.graphEnrichment
     }
 
     zone gpuZone 'GPU Zone' {
-      description 'Self-hosted Qwen via vLLM (CUDA).'
-      instanceOf aiAssistant.vllm
+      description 'Изолированный инференс на GPU (CUDA): vLLM (Qwen) + Triton (embeddings/reranker). gRPC. ADR-008.'
+      instanceOf creditPlatform.graphragRuntime.vllm
+      instanceOf creditPlatform.graphragRuntime.inferenceServer
     }
 
-    zone observability 'Observability' {
-      description 'OTel Collector, Jaeger, Prometheus/Grafana.'
-      instanceOf aiAssistant.otelCollector
-      instanceOf aiAssistant.jaeger
-      instanceOf aiAssistant.prometheus
+    zone observabilityZone 'Observability' {
+      description 'OTel Collector, Jaeger, Prometheus/Grafana, Alertmanager, Backup.'
+      instanceOf creditPlatform.observability.otelCollector
+      instanceOf creditPlatform.observability.jaeger
+      instanceOf creditPlatform.observability.prometheus
+      instanceOf creditPlatform.observability.alertmanager
+      instanceOf creditPlatform.observability.backupScheduler
+      instanceOf creditPlatform.observability.backupStorage
     }
 
   }
@@ -45,12 +58,12 @@ deployment {
 views {
 
   deployment view mvp_deployment {
-    title 'MVP: Deployment — Control Plane / Data Plane'
+    title 'MVP: Deployment — Control Plane / Data Plane / GPU'
     description '
       Зоны развёртывания MVP:
-      DMZ → Control Plane (Backend, Vault) →
+      DMZ → Control Plane (Backend, Vault, OPA) →
       Data Plane (Neo4j, Qdrant, PostgreSQL, MinIO) →
-      GPU Zone (vLLM) → Observability.
+      Ingestion Zone (ETL) → GPU Zone (vLLM + Triton, gRPC) → Observability.
     '
     includeAncestors: true
     include prod.**

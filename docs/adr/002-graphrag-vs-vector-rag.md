@@ -40,6 +40,8 @@ Accepted
 1. Векторный поиск фрагментов через pgvector (PoC) / Qdrant (MVP).
 2. Расширение контекста по рёбрам `graph_edge` из knowledge graph (PoC — PostgreSQL, MVP — Neo4j).
 
+Dense- и graph-списки сливаются ранговым методом: на MVP — Reciprocal Rank Fusion (RRF) с последующим cross-encoder reranking (ADR-009), что нивелирует разницу шкал косинусного сходства и графовых скоров.
+
 ## Consequences
 
 **Плюсы:** выполнено требование IT-директора; граф обеспечивает аудиторский след для compliance; graph expansion тестируется в pytest.

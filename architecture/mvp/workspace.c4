@@ -23,6 +23,14 @@ specification {
     }
   }
 
+  element subsystem {
+    notation "Subsystem"
+    style {
+      opacity 25%
+      color indigo
+    }
+  }
+
   element container {
     notation "Container"
   }
@@ -82,6 +90,11 @@ specification {
 
   relationship async {
     line dashed
+  }
+
+  relationship grpc {
+    line solid
+    head normal
   }
 
 }
