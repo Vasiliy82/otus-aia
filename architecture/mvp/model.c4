@@ -84,7 +84,6 @@ model {
           description '
             POST /ask — {query, role} → {answer, citations, trace_id, blocked}.
             GET /health · GET /metrics.
-            mTLS от DMZ.
           '
           -> langGraph 'invoke(state)'
         }

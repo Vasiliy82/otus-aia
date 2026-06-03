@@ -21,7 +21,7 @@ views {
         - `query` — текст вопроса
         - `role` — роль пользователя для RBAC-фильтрации
 
-        Запрос приходит через DMZ с mTLS; API запускает LangGraph workflow.
+        API запускает LangGraph workflow.
         FastAPI не загружает ML-модели — только gRPC-каналы к Triton/vLLM.
       '''
     }

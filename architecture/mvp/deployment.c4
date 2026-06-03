@@ -3,13 +3,8 @@ deployment {
   environment prod 'Production MVP' {
     description '
       Целевое on-prem развёртывание MVP (Q1-Q3 2027).
-      DMZ, Control Plane, Data Plane, Ingestion, GPU Zone, Observability.
+      Control Plane, Data Plane, Ingestion, GPU Zone, Observability.
     '
-
-    zone dmz 'DMZ' {
-      description 'Perimeter: API Gateway, mTLS ingress.'
-      instanceOf creditPlatform.graphragRuntime.apiGateway
-    }
 
     zone controlPlane 'Control Plane' {
       description 'Оркестрация, секреты, guardrails, RBAC logic, OPA.'
@@ -61,7 +56,7 @@ views {
     title 'MVP: Deployment — Control Plane / Data Plane / GPU'
     description '
       Зоны развёртывания MVP:
-      DMZ → Control Plane (Backend, Vault, OPA) →
+      Control Plane (Backend, Vault, OPA) →
       Data Plane (Neo4j, Qdrant, PostgreSQL, MinIO) →
       Ingestion Zone (ETL) → GPU Zone (vLLM + Triton, gRPC) → Observability.
     '
