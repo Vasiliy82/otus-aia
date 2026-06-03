@@ -88,6 +88,22 @@ specification {
     }
   }
 
+  deploymentNode kubernetesCluster {
+    notation "Kubernetes Cluster"
+    style {
+      opacity 12%
+      color indigo
+    }
+  }
+
+  deploymentNode vmHost {
+    notation "VM Host Layer"
+    style {
+      opacity 12%
+      color sky
+    }
+  }
+
   relationship async {
     line dashed
   }

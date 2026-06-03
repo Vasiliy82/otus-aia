@@ -2,48 +2,66 @@ deployment {
 
   environment prod 'Production MVP' {
     description '
-      Целевое on-prem развёртывание MVP (Q1-Q3 2027).
-      Control Plane, Data Plane, Ingestion, GPU Zone, Observability.
+      On-prem MVP (Q1-Q3 2027): один product Kubernetes-кластер (stateless)
+      + Data VMs (stateful). ADR-011.
     '
 
-    zone controlPlane 'Control Plane' {
-      description 'Оркестрация, секреты, guardrails, RBAC logic, OPA.'
-      instanceOf creditPlatform.graphragRuntime.apiGateway
-      instanceOf creditPlatform.security.vault
-      instanceOf creditPlatform.security.opa
+    k8sCluster = kubernetesCluster 'Product Kubernetes (on-prem)' {
+      description '
+        Единый product K8s-кластер. GitOps (Argo CD) из deliveryPlatform.
+        Worker nodes на VM; GPU node pool — bare metal или GPU-VM.
+      '
+
+      nsApp = zone 'ns: credit-ai-app' {
+        description 'Online runtime: FastAPI, OPA, Vault Agent. Ingress/mTLS через bank ingress.'
+        instanceOf creditPlatform.graphragRuntime.apiGateway
+        instanceOf creditPlatform.security.opa
+        instanceOf creditPlatform.security.vault
+      }
+
+      nsGpu = zone 'ns: credit-ai-gpu' {
+        description 'Inference: vLLM + Triton. GPU node pool (CUDA, gRPC). ADR-008.'
+        instanceOf creditPlatform.graphragRuntime.vllm
+        instanceOf creditPlatform.graphragRuntime.inferenceServer
+      }
+
+      nsIngestion = zone 'ns: credit-ai-ingestion' {
+        description 'Offline/batch: Airflow, parsers, chunker, batch embeddings, graph enrichment.'
+        instanceOf creditPlatform.ingestion.etlOrchestrator
+        instanceOf creditPlatform.ingestion.docParsers
+        instanceOf creditPlatform.ingestion.chunker
+        instanceOf creditPlatform.ingestion.batchEmbeddings
+        instanceOf creditPlatform.ingestion.graphEnrichment
+      }
+
+      nsObservability = zone 'ns: credit-ai-observability' {
+        description 'OTel, Jaeger, Prometheus/Grafana, Alertmanager, backup scheduler (Velero/CronJob).'
+        instanceOf creditPlatform.observability.otelCollector
+        instanceOf creditPlatform.observability.jaeger
+        instanceOf creditPlatform.observability.prometheus
+        instanceOf creditPlatform.observability.alertmanager
+        instanceOf creditPlatform.observability.backupScheduler
+      }
     }
 
-    zone dataPlane 'Data Plane' {
-      description 'PostgreSQL, Qdrant, Neo4j, MinIO.'
-      instanceOf creditPlatform.postgres
-      instanceOf creditPlatform.qdrant
-      instanceOf creditPlatform.neo4j
-      instanceOf creditPlatform.minio
-    }
+    dataVms = vmHost 'Data VMs (stateful)' {
+      description '
+        VM-hosted хранилища вне product K8s. Bank infra / DBA.
+        Подключение из pod''ов по internal network.
+      '
 
-    zone ingestionZone 'Ingestion Zone' {
-      description 'Offline/batch ETL: Airflow, parsers, chunker, batch embeddings, graph enrichment.'
-      instanceOf creditPlatform.ingestion.etlOrchestrator
-      instanceOf creditPlatform.ingestion.docParsers
-      instanceOf creditPlatform.ingestion.chunker
-      instanceOf creditPlatform.ingestion.batchEmbeddings
-      instanceOf creditPlatform.ingestion.graphEnrichment
-    }
+      dbTier = zone 'DB Tier (VM)' {
+        description 'PostgreSQL, Neo4j, Qdrant — managed на VM.'
+        instanceOf creditPlatform.postgres
+        instanceOf creditPlatform.neo4j
+        instanceOf creditPlatform.qdrant
+      }
 
-    zone gpuZone 'GPU Zone' {
-      description 'Изолированный инференс на GPU (CUDA): vLLM (Qwen) + Triton (embeddings/reranker). gRPC. ADR-008.'
-      instanceOf creditPlatform.graphragRuntime.vllm
-      instanceOf creditPlatform.graphragRuntime.inferenceServer
-    }
-
-    zone observabilityZone 'Observability' {
-      description 'OTel Collector, Jaeger, Prometheus/Grafana, Alertmanager, Backup.'
-      instanceOf creditPlatform.observability.otelCollector
-      instanceOf creditPlatform.observability.jaeger
-      instanceOf creditPlatform.observability.prometheus
-      instanceOf creditPlatform.observability.alertmanager
-      instanceOf creditPlatform.observability.backupScheduler
-      instanceOf creditPlatform.observability.backupStorage
+      objectStorage = zone 'Object Storage (VM)' {
+        description 'MinIO raw zone, offsite backup storage.'
+        instanceOf creditPlatform.minio
+        instanceOf creditPlatform.observability.backupStorage
+      }
     }
 
   }
@@ -53,12 +71,12 @@ deployment {
 views {
 
   deployment view mvp_deployment {
-    title 'MVP: Deployment — Control Plane / Data Plane / GPU'
+    title 'MVP: Deployment — K8s + Data VMs'
     description '
-      Зоны развёртывания MVP:
-      Control Plane (Backend, Vault, OPA) →
-      Data Plane (Neo4j, Qdrant, PostgreSQL, MinIO) →
-      Ingestion Zone (ETL) → GPU Zone (vLLM + Triton, gRPC) → Observability.
+      Deployment MVP (ADR-011):
+      Product Kubernetes (namespaces: app, gpu, ingestion, observability)
+      + Data VMs (PostgreSQL, Neo4j, Qdrant, MinIO, backup storage).
+      Один K8s-кластер; GPU — node pool; CI/CD — внешняя deliveryPlatform.
     '
     includeAncestors: true
     include prod.**

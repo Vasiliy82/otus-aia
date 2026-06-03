@@ -17,6 +17,7 @@
 | 008 | [inference-isolation-grpc](008-inference-isolation-grpc.md) | Accepted | 2026-06-03 |
 | 009 | [context-ranking-rrf-crossencoder](009-context-ranking-rrf-crossencoder.md) | Accepted | 2026-06-03 |
 | 010 | [platform-subsystem-decomposition](010-platform-subsystem-decomposition.md) | Accepted | 2026-06-03 |
+| 011 | [deployment-topology-k8s-vms](011-deployment-topology-k8s-vms.md) | Accepted | 2026-06-03 |
 
 ## Запланировано (MVP)
 

@@ -52,5 +52,8 @@
 | Технология | PoC | MVP | Условие перехода |
 |-----------|-----|-----|-----------------|
 | Docker Compose | Локальный стенд | CI/CD + staging | Наращивается |
-| Kubernetes | — | Целевая среда выполнения | После ИБ-аудита |
-| GPU-серверы | — | Минимум 1× A100/H100 (24+ ГБ VRAM) | После закупки (бюджет Q1 2027) |
+| Kubernetes | — | Один product-кластер on-prem (stateless workloads) | После ИБ-аудита |
+| K8s namespaces | — | app / gpu / ingestion / observability | ADR-011 |
+| VM (stateful) | PostgreSQL (PoC) | PostgreSQL, Neo4j, Qdrant, MinIO на VM | Bank DBA / infra |
+| GPU node pool | — | Bare metal или GPU-VM workers в product K8s | После закупки GPU |
+| GPU-серверы | — | Минимум 1× A100/H100 (24+ ГБ VRAM) | Бюджет Q1 2027 |

@@ -76,7 +76,11 @@ model {
 
       apiGateway = container 'FastAPI Backend (API Gateway)' {
         technology 'Python 3.11, FastAPI, uvicorn, gRPC client'
-        description 'REST API + LangGraph оркестратор. Строго I/O-bound, без локального инференса. ADR-008.'
+        description '
+          REST API + LangGraph оркестратор. Строго I/O-bound, без локального инференса.
+          Deployment: K8s ns credit-ai-app, Ingress/mTLS через bank ingress controller.
+          ADR-008, ADR-011.
+        '
         icon tech:python
 
         apiLayer = component 'API Layer' {
@@ -190,18 +194,17 @@ model {
       vllm = container 'vLLM Server (Qwen)' {
         technology 'vLLM, Qwen2.5-72B, CUDA'
         description '
-          Self-hosted LLM на GPU-сервере (24+ ГБ VRAM).
-          OpenAI-compatible API. Изолированный inference генерации.
-          Закупка GPU Q1 2027. ADR-003, ADR-007, ADR-008.
+          Self-hosted LLM (24+ ГБ VRAM). OpenAI-compatible API.
+          Deployment: K8s ns credit-ai-gpu, GPU node pool (bare metal workers).
+          ADR-003, ADR-007, ADR-008, ADR-011.
         '
       }
 
       inferenceServer = container 'Triton Inference Server' {
         technology 'NVIDIA Triton, gRPC, CUDA'
         description '
-          Изолированный GPU-сервер инференса embeddings + cross-encoder reranker.
-          Динамический батчинг, конкурентные инстансы моделей.
-          Снимает CPU/GIL-боттлнек с FastAPI. ADR-008.
+          GPU inference: embeddings + cross-encoder reranker. Динамический батчинг, gRPC.
+          Deployment: K8s ns credit-ai-gpu, GPU node pool. ADR-008, ADR-011.
         '
       }
     }
@@ -219,7 +222,7 @@ model {
         technology 'Python, Apache Airflow'
         description '
           DAG индексации нормативного корпуса и финансовой отчётности.
-          Согласованный с Дирекцией права процесс.
+          Deployment: K8s ns credit-ai-ingestion. ADR-011.
         '
         -> creditPlatform.minio       'download source documents'
         -[async]-> legalCorpus        'fetch normative documents'
@@ -311,14 +314,15 @@ model {
       vault = container 'HashiCorp Vault' {
         technology 'HashiCorp Vault'
         description '
-          Управление секретами: DB credentials, API keys, TLS / mTLS certs.
-          Заменяет .env PoC. ADR-007.
+          Управление секретами: DB credentials, API keys, TLS/mTLS certs.
+          Deployment: Vault Agent в K8s ns credit-ai-app (server — bank infra).
+          ADR-007, ADR-011.
         '
       }
 
       opa = container 'OPA Policy Engine' {
         technology 'Open Policy Agent'
-        description 'Политики доступа: какие роли видят какие чанки. ADR-006.'
+        description 'Политики доступа: какие роли видят какие чанки. K8s ns credit-ai-app. ADR-006, ADR-011.'
       }
 
       auditLog = container 'Audit Log' {
@@ -338,7 +342,7 @@ model {
 
       otelCollector = container 'OTel Collector' {
         technology 'OpenTelemetry Collector'
-        description 'Агрегирует трейсы, метрики, логи от всех сервисов. ADR-007.'
+        description 'Агрегирует трейсы, метрики, логи. K8s ns credit-ai-observability. ADR-007, ADR-011.'
         -> jaeger     'export traces'
         -> prometheus 'export metrics'
       }
@@ -364,7 +368,7 @@ model {
 
       backupScheduler = container 'Backup Scheduler' {
         technology 'CronJob / Velero'
-        description 'Регулярные бэкапы PostgreSQL, Qdrant, Neo4j, MinIO.'
+        description 'Регулярные бэкапы VM-хранилищ. K8s ns credit-ai-observability (Velero/CronJob). ADR-011.'
         -> backupStorage           'store snapshots'
         -[async]-> creditPlatform.postgres 'backup'
         -[async]-> creditPlatform.qdrant   'backup'
@@ -373,7 +377,7 @@ model {
 
       backupStorage = container 'Backup Storage' {
         technology 'Object storage (offsite)'
-        description 'Хранилище снимков для восстановления (DR runbooks).'
+        description 'Offsite снимки для DR. VM / object storage, вне product K8s. ADR-011.'
       }
     }
 
@@ -382,27 +386,24 @@ model {
     qdrant = database 'Qdrant Cluster' {
       technology 'Qdrant, HNSW'
       description '
-        Векторная БД: dense embeddings (dim=768+),
-        HNSW индекс, косинусное расстояние.
-        Заменяет pgvector PoC. ADR-004, ADR-007.
+        Векторная БД (dim=768+, HNSW cosine). VM-hosted, вне product K8s.
+        ADR-004, ADR-007, ADR-011.
       '
     }
 
     neo4j = database 'Neo4j Cluster' {
       technology 'Neo4j 5.x, Cypher'
       description '
-        Графовое хранилище: chunk, document, company, risk, law узлы;
-        BELONGS_TO, MENTIONS, LINKED_TO рёбра.
-        Заменяет graph_edge в PostgreSQL PoC. ADR-007.
+        Графовое хранилище (Chunk, Document, Company, Risk, Law).
+        VM-hosted cluster, вне product K8s. ADR-007, ADR-011.
       '
     }
 
     postgres = database 'PostgreSQL' {
       technology 'PostgreSQL 16'
       description '
-        Реляционные данные: chunk metadata, RBAC (allowed_roles),
-        audit log, пользователи.
-        Сохраняется из PoC.
+        Chunk metadata, RBAC (allowed_roles), audit log.
+        VM-hosted, managed by bank DBA, вне product K8s. ADR-011.
       '
       icon tech:postgresql
     }
@@ -410,8 +411,7 @@ model {
     minio = container 'MinIO' {
       technology 'MinIO S3-compatible'
       description '
-        Объектное хранилище документов нормативного корпуса (raw zone).
-        Исходные PDF/DOCX перед индексацией.
+        Raw zone: исходные PDF/DOCX. VM-hosted object storage, вне product K8s. ADR-011.
       '
     }
 

@@ -47,10 +47,10 @@ MVP позиционируется как production-ready (almost-production), 
 
 **Минусы:** дополнительный сервис (Triton) в эксплуатации; модели нужно упаковывать в формат Triton; зависимость от закупки GPU.
 
-**Риски:** сетевой hop API → Triton добавляет задержку — снижается локальностью внутри GPU Zone, gRPC keep-alive и батчингом. Насыщение GPU — отслеживается метриками (Prometheus) и алертами (ADR-007).
+**Риски:** сетевой hop API → Triton добавляет задержку — снижается colocation в K8s ns `credit-ai-gpu` (GPU node pool), gRPC keep-alive и батчингом. Насыщение GPU — метрики Prometheus и алерты (ADR-007).
 
-**Дополнительно:** обновлены контейнерные и deployment-диаграммы MVP (`architecture/mvp`): добавлен `Triton Inference Server` в GPU Zone рядом с vLLM; компоненты `Embeddings`/`Reranker` в FastAPI заменены на gRPC-клиенты. Реестр замены мок-компонентов — ADR-007.
+**Дополнительно:** vLLM и Triton размещаются в K8s namespace `credit-ai-gpu` (ADR-011); FastAPI — в `credit-ai-app`; gRPC-клиенты вместо in-process Embeddings/Reranker. ADR-007.
 
 ## Compliance & Security
 
-Трафик API ↔ Triton/vLLM остаётся внутри закрытого контура (GPU Zone), защищён mTLS; секреты и сертификаты — из Vault. Данные не покидают периметр банка (ФЗ-152, требования ЦБ РФ). Трассировка `trace_id` сквозная: API → retrieval/rerank (Triton) → LLM (vLLM) видна в Jaeger.
+Трафик app ns ↔ gpu ns остаётся внутри product K8s, защищён mTLS; секреты — Vault. Данные на VM-БД не покидают периметр банка (ФЗ-152). Трассировка `trace_id` сквозная в Jaeger.

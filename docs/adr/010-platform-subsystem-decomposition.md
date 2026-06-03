@@ -54,7 +54,7 @@ Accepted
 7. Observability & Reliability
 8. Security & Access Control
 9. Architecture as Code
-- плюс L3 Components, Sequence `POST /ask`, ER (PostgreSQL, Qdrant/Neo4j), Deployment.
+- плюс L3 Components, Sequence `POST /ask`, ER (PostgreSQL, Qdrant/Neo4j), Deployment (K8s + Data VMs, ADR-011).
 
 ## Consequences
 

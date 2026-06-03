@@ -37,6 +37,21 @@
 
 Ранжирование выполняется **после** RBAC-фильтрации (ADR-006).
 
+### Deployment-топология (ADR-011)
+
+Production MVP — **один on-prem product Kubernetes-кластер** + **Data VMs** для stateful:
+
+| Слой | Размещение | Компоненты |
+|------|------------|------------|
+| `credit-ai-app` | K8s namespace | FastAPI, OPA, Vault Agent |
+| `credit-ai-gpu` | K8s namespace (GPU node pool) | vLLM, Triton |
+| `credit-ai-ingestion` | K8s namespace | Airflow, ETL, batch jobs |
+| `credit-ai-observability` | K8s namespace | OTel, Jaeger, Prometheus, Velero |
+| DB Tier | VM (bank infra / DBA) | PostgreSQL, Neo4j, Qdrant |
+| Object Storage | VM | MinIO, backup storage |
+
+Stateless — в K8s; stateful БД и object storage — на VM. GPU workers — bare metal или GPU-VM в том же кластере. CI/CD — внешняя `deliveryPlatform` (GitOps в product K8s). Отдельные K8s-кластеры на MVP не используем.
+
 ## Состав архитектурных артефактов (LikeC4, `architecture/mvp/`)
 
 8 целевых представлений + детализирующие диаграммы:
@@ -55,7 +70,7 @@
 | — | `mvp_component` | L3 — компоненты FastAPI (RRF, gRPC-клиенты) |
 | — | `mvp_ask_sequence` | Sequence — `POST /ask` (gRPC к Triton, RRF, cross-encoder, vLLM) |
 | — | `mvp_er_postgres` / `mvp_er_datastores` | ER PostgreSQL и логические сущности Qdrant/Neo4j |
-| — | `mvp_deployment` | Deployment — DMZ / Control Plane / Data Plane / Ingestion / GPU Zone / Observability |
+| — | `mvp_deployment` | Deployment — K8s (namespaces) + Data VMs (ADR-011) |
 
 ## Ключевые отличия MVP от PoC
 
@@ -69,6 +84,7 @@
 | Secrets | `.env` | HashiCorp Vault |
 | Observability | JSON-логи с `trace_id` | OpenTelemetry + Jaeger + Prometheus |
 | Ingestion | Indexing CLI внутри FastAPI | отдельная подсистема Knowledge Ingestion |
+| Deployment | Docker Compose (on-prem) | K8s (stateless) + VM (stateful DB) — ADR-011 |
 | Юридический корпус | синтетика | реальная нормативная база |
 
 ## Условия перехода к MVP
@@ -84,4 +100,5 @@
 - [008-inference-isolation-grpc.md](../adr/008-inference-isolation-grpc.md) — изоляция inference-слоя (Triton, gRPC).
 - [009-context-ranking-rrf-crossencoder.md](../adr/009-context-ranking-rrf-crossencoder.md) — RRF + cross-encoder.
 - [010-platform-subsystem-decomposition.md](../adr/010-platform-subsystem-decomposition.md) — декомпозиция платформы и набор views.
+- [011-deployment-topology-k8s-vms.md](../adr/011-deployment-topology-k8s-vms.md) — K8s + VM, namespaces, node pools.
 - [007-poc-mocks-and-mvp-replacement.md](../adr/007-poc-mocks-and-mvp-replacement.md) — реестр замены мок-компонентов.
