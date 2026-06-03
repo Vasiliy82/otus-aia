@@ -6,7 +6,7 @@ views {
     title 'MVP: AI-платформа кредитного анализа'
     description '
       Целевая Production-архитектура MVP как единая платформа с подсистемами.
-      Secure GraphRAG Runtime (FastAPI I/O + vLLM + Triton),
+      Secure GraphRAG Runtime (FastAPI + RAG Orchestrator + vLLM + Triton),
       Knowledge Ingestion, AI Quality & MLOps, Security, Observability.
       8 представлений: landscape, контейнеры подсистем, sequence, ER, deployment.
       Q1-Q3 2027. Зависит от GO-решения ТехКома по PoC.
@@ -48,9 +48,10 @@ views {
   view mvp_container of creditPlatform {
     title 'MVP: 2 — Platform Subsystems (C2)'
     description '
-      Подсистемы платформы: Secure GraphRAG Runtime, Knowledge Ingestion,
-      AI Quality & MLOps, Security & Access Control, Observability & Reliability,
-      общие хранилища (Qdrant, Neo4j, PostgreSQL, MinIO).
+      Подсистемы платформы и их взаимодействия:
+      Secure GraphRAG Runtime, Knowledge Ingestion Pipeline,
+      AI Quality & MLOps, Security & Access Control, Observability & Reliability.
+      Хранилища распределены по подсистемам-владельцам.
     '
     include
       *,
@@ -81,17 +82,14 @@ views {
     title 'MVP: 3 — Secure GraphRAG Runtime'
     description '
       Production online-контур запроса:
-      FastAPI (I/O-bound) → vLLM (генерация) + Triton (embeddings/reranker, gRPC),
-      Qdrant + Neo4j + PostgreSQL, OPA.
-      Тяжёлый инференс изолирован от API-шлюза. ADR-008.
+      FastAPI (HTTP-транспорт) → RAG Orchestrator (LangGraph pipeline) →
+      vLLM (генерация) + Triton (embeddings/reranker, gRPC).
+      Реплики: PostgreSQL, Qdrant, Neo4j. Тяжёлый инференс изолирован. ADR-008.
     '
     include
       *,
       creditAnalyst,
-      creditPlatform.qdrant,
-      creditPlatform.neo4j,
-      creditPlatform.postgres,
-      creditPlatform.security.opa
+      creditPlatform.security
 
     style creditPlatform.graphragRuntime {
       opacity 0%
@@ -99,7 +97,7 @@ views {
     style creditAnalyst {
       size sm
     }
-    style creditPlatform.qdrant, creditPlatform.neo4j, creditPlatform.postgres, creditPlatform.security.opa {
+    style creditPlatform.security {
       size sm
     }
   }
@@ -110,18 +108,15 @@ views {
     title 'MVP: 4 — Knowledge Ingestion Pipeline'
     description '
       Offline/batch-контур: документы → парсинг → чанкинг →
-      batch embeddings (Triton, gRPC) → graph enrichment →
-      upsert в Qdrant / Neo4j / PostgreSQL.
+      batch embeddings (Triton, gRPC через graphragRuntime) → graph enrichment →
+      upsert в Qdrant / Neo4j / PostgreSQL (primary).
+      Реплицирует БД в graphragRuntime.
     '
     include
       *,
       legalCorpus,
       financialSources,
-      creditPlatform.minio,
-      creditPlatform.qdrant,
-      creditPlatform.neo4j,
-      creditPlatform.postgres,
-      creditPlatform.graphragRuntime.inferenceServer
+      creditPlatform.graphragRuntime
 
     style creditPlatform.ingestion {
       opacity 0%
@@ -129,7 +124,7 @@ views {
     style legalCorpus, financialSources {
       size sm
     }
-    style creditPlatform.minio, creditPlatform.qdrant, creditPlatform.neo4j, creditPlatform.postgres, creditPlatform.graphragRuntime.inferenceServer {
+    style creditPlatform.graphragRuntime {
       size sm
     }
   }
@@ -145,7 +140,7 @@ views {
     include
       *,
       mlEngineer,
-      creditPlatform.graphragRuntime.apiGateway,
+      creditPlatform.graphragRuntime,
       deliveryPlatform
 
     style creditPlatform.aiQuality {
@@ -154,7 +149,7 @@ views {
     style mlEngineer {
       size sm
     }
-    style creditPlatform.graphragRuntime.apiGateway, deliveryPlatform {
+    style creditPlatform.graphragRuntime, deliveryPlatform {
       size sm
     }
   }
@@ -172,7 +167,7 @@ views {
       *,
       platformOps,
       creditPlatform,
-      creditPlatform.aiQuality.mlflow
+      creditPlatform.aiQuality
 
     style deliveryPlatform {
       opacity 0%
@@ -180,7 +175,7 @@ views {
     style platformOps {
       size sm
     }
-    style creditPlatform, creditPlatform.aiQuality.mlflow {
+    style creditPlatform, creditPlatform.aiQuality {
       size sm
     }
   }
@@ -200,9 +195,8 @@ views {
       creditPlatform.graphragRuntime.apiGateway,
       creditPlatform.graphragRuntime.vllm,
       creditPlatform.graphragRuntime.inferenceServer,
-      creditPlatform.postgres,
-      creditPlatform.qdrant,
-      creditPlatform.neo4j
+      creditPlatform.ingestion,
+      creditPlatform.security
 
     style creditPlatform.observability {
       opacity 0%
@@ -210,7 +204,10 @@ views {
     style platformOps {
       size sm
     }
-    style creditPlatform.graphragRuntime.apiGateway, creditPlatform.graphragRuntime.vllm, creditPlatform.graphragRuntime.inferenceServer, creditPlatform.postgres, creditPlatform.qdrant, creditPlatform.neo4j {
+    style creditPlatform.graphragRuntime.apiGateway, creditPlatform.graphragRuntime.vllm, creditPlatform.graphragRuntime.inferenceServer {
+      size sm
+    }
+    style creditPlatform.ingestion, creditPlatform.security {
       size sm
     }
   }
@@ -220,17 +217,16 @@ views {
   view mvp_security of creditPlatform.security {
     title 'MVP: 8 — Security & Access Control'
     description '
-      Trust boundaries: Vault (секреты), OPA (политики), Audit Log.
-      Интеграция с корпоративной IAM/SSO. Используется RBAC Filter рантайма
-      и PostgreSQL allowed_roles. ADR-006.
+      Trust boundaries: Vault (секреты), OPA (политики), Audit Log, PostgreSQL (audit).
+      Интеграция с корпоративной IAM/SSO. Принимает события аудита от graphragRuntime.
+      ADR-006.
     '
     include
       *,
       creditAnalyst,
       complianceOfficer,
       corporateIam,
-      creditPlatform.graphragRuntime.apiGateway,
-      creditPlatform.postgres
+      creditPlatform.graphragRuntime
 
     style creditPlatform.security {
       opacity 0%
@@ -238,7 +234,7 @@ views {
     style creditAnalyst, complianceOfficer {
       size sm
     }
-    style corporateIam, creditPlatform.graphragRuntime.apiGateway, creditPlatform.postgres {
+    style corporateIam, creditPlatform.graphragRuntime {
       size sm
     }
   }
@@ -255,43 +251,42 @@ views {
     include
       *,
       creditPlatform,
-      creditPlatform.observability.jaeger
+      creditPlatform.observability
 
     style archGovernance {
       opacity 0%
     }
-    style creditPlatform, creditPlatform.observability.jaeger {
+    style creditPlatform, creditPlatform.observability {
       size sm
     }
   }
 
-  // ─── L3: Backend Components ──────────────────────────────────────────────
+  // ─── L3: RAG Pipeline Components ─────────────────────────────────────────
 
-  view mvp_component of creditPlatform.graphragRuntime.apiGateway {
-    title 'MVP: L3 — Backend Components'
+  view mvp_component of creditPlatform.graphragRuntime.ragOrchestrator {
+    title 'MVP: L3 — RAG Pipeline Components'
     description '
-      Компоненты FastAPI backend (I/O-bound):
-      LangGraph workflow, hybrid retrieval (Qdrant + Neo4j), RRF Fusion,
-      RBAC + OPA, cross-encoder rerank, gRPC-клиенты embeddings/rerank к Triton,
-      LLM Client к vLLM.
+      Компоненты RAG Pipeline Orchestrator (LangGraph StateGraph):
+      Guardrails → Hybrid Retrieval (Qdrant + Neo4j) → RRF Fusion
+      → RBAC Filter → Cross-encoder Rerank → LLM Client.
+      gRPC-клиенты embeddings/rerank к Triton (inferenceServer).
     '
     include
       *,
-      creditPlatform.qdrant,
-      creditPlatform.neo4j,
-      creditPlatform.postgres,
+      creditPlatform.graphragRuntime.qdrant_grr,
+      creditPlatform.graphragRuntime.neo4j_grr,
+      creditPlatform.graphragRuntime.postgres_grr,
       creditPlatform.graphragRuntime.vllm,
       creditPlatform.graphragRuntime.inferenceServer,
-      creditPlatform.security.opa,
       creditAnalyst
 
-    style creditPlatform.graphragRuntime.apiGateway {
+    style creditPlatform.graphragRuntime.ragOrchestrator {
       opacity 0%
     }
     style creditAnalyst {
       size sm
     }
-    style creditPlatform.qdrant, creditPlatform.neo4j, creditPlatform.postgres, creditPlatform.graphragRuntime.vllm, creditPlatform.graphragRuntime.inferenceServer, creditPlatform.security.opa {
+    style creditPlatform.graphragRuntime.qdrant_grr, creditPlatform.graphragRuntime.neo4j_grr, creditPlatform.graphragRuntime.postgres_grr, creditPlatform.graphragRuntime.vllm, creditPlatform.graphragRuntime.inferenceServer {
       size sm
     }
   }

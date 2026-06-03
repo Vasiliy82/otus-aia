@@ -1,6 +1,6 @@
 model {
 
-  extend creditPlatform.postgres {
+  extend creditPlatform.ingestion.postgres_i {
 
     company = pgTable 'company' {
       description 'PK: company_id. inn UNIQUE. infra/sql/001_financial.sql'
@@ -53,14 +53,17 @@ model {
       -> chunk 'chunk_id'
     }
 
+  }
+
+  extend creditPlatform.security.postgres_s {
+
     audit_log = pgTable 'audit_log' {
       description 'PK: audit_id. Append-only след запросов и решений RBAC по trace_id.'
-      -> chunk 'cited_chunk_id'
     }
 
   }
 
-  extend creditPlatform.qdrant {
+  extend creditPlatform.ingestion.qdrant_i {
 
     chunkVectors = datastoreEntity 'chunk_vectors collection' {
       description '
@@ -72,7 +75,7 @@ model {
 
   }
 
-  extend creditPlatform.neo4j {
+  extend creditPlatform.ingestion.neo4j_i {
 
     graphNodes = datastoreEntity 'Graph nodes' {
       description '
@@ -95,15 +98,29 @@ model {
 
 views {
 
-  view mvp_er_postgres of creditPlatform.postgres {
-    title 'MVP: ER — PostgreSQL'
+  view mvp_er_postgres of creditPlatform.ingestion.postgres_i {
+    title 'MVP: ER — PostgreSQL (ingestion primary)'
     description '
-      Реляционная схема MVP (metadata, RBAC, audit).
+      Реляционная схема MVP (metadata, RBAC).
+      Источник данных: Knowledge Ingestion Pipeline.
       Согласована с infra/sql/001-004.
     '
     include *
 
-    style creditPlatform.postgres {
+    style creditPlatform.ingestion.postgres_i {
+      opacity 0%
+    }
+  }
+
+  view mvp_er_audit of creditPlatform.security.postgres_s {
+    title 'MVP: ER — PostgreSQL (security audit)'
+    description '
+      Аудиторская схема MVP (append-only audit log).
+      Источник данных: события от graphragRuntime.
+    '
+    include *
+
+    style creditPlatform.security.postgres_s {
       opacity 0%
     }
   }
@@ -112,15 +129,15 @@ views {
     title 'MVP: ER — Qdrant & Neo4j (logical)'
     description '
       Логические сущности векторного и графового хранилищ MVP.
-      Не DDL — согласование с model.c4 (Qdrant + Neo4j).
+      Не DDL — согласование с model.c4 (Qdrant + Neo4j, primary в ingestion).
     '
     include
-      creditPlatform.qdrant,
-      creditPlatform.neo4j,
-      creditPlatform.qdrant.*,
-      creditPlatform.neo4j.*
+      creditPlatform.ingestion.qdrant_i,
+      creditPlatform.ingestion.neo4j_i,
+      creditPlatform.ingestion.qdrant_i.*,
+      creditPlatform.ingestion.neo4j_i.*
 
-    style creditPlatform.qdrant, creditPlatform.neo4j {
+    style creditPlatform.ingestion.qdrant_i, creditPlatform.ingestion.neo4j_i {
       opacity 0%
     }
   }

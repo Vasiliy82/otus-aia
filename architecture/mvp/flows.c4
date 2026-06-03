@@ -3,11 +3,11 @@ views {
   dynamic view mvp_ask_sequence {
     title 'MVP: Sequence — POST /ask'
     description '
-      User → Guardrails → hybrid retrieval (Qdrant + Neo4j) → RRF fusion
+      User → Guardrails → hybrid retrieval (Qdrant + Neo4j реплики) → RRF fusion
       → RBAC → cross-encoder rerank (Triton, gRPC) → LLM (vLLM/Qwen).
 
       Тяжёлый инференс (embeddings, cross-encoder) изолирован в Triton по gRPC;
-      FastAPI остаётся I/O-bound. Ранжирование: RRF + cross-encoder вместо
+      RAG Orchestrator остаётся I/O-bound. Ранжирование: RRF + cross-encoder вместо
       эвристики. Трассировка OTel. ADR-008, ADR-009.
     '
     variant sequence
@@ -21,11 +21,11 @@ views {
         - `query` — текст вопроса
         - `role` — роль пользователя для RBAC-фильтрации
 
-        API запускает LangGraph workflow.
+        FastAPI принимает запрос и маршрутизирует в RAG Orchestrator.
         FastAPI не загружает ML-модели — только gRPC-каналы к Triton/vLLM.
       '''
     }
-      -> creditPlatform.graphragRuntime.apiGateway.guardrails 'input guardrails' {
+      -> creditPlatform.graphragRuntime.ragOrchestrator.guardrails 'input guardrails' {
       notes '''
         **Проверка входа**
 
@@ -35,7 +35,7 @@ views {
         - формат входных данных и ограничения роли
       '''
     }
-      -> creditPlatform.graphragRuntime.apiGateway.retrieval 'hybrid retrieve' {
+      -> creditPlatform.graphragRuntime.ragOrchestrator.retrieval 'hybrid retrieve' {
       notes '''
         **Гибридный поиск**
 
@@ -43,12 +43,12 @@ views {
         ранжированных списка для последующего RRF-слияния.
       '''
     }
-      -> creditPlatform.graphragRuntime.apiGateway.embeddingClient 'encode query' {
+      -> creditPlatform.graphragRuntime.ragOrchestrator.embeddingClient 'encode query' {
       notes '''
         **Векторизация запроса**
 
         Тонкий gRPC-клиент вызывает Triton — без загрузки модели в процесс
-        FastAPI (не блокируем GIL). ADR-008.
+        RAG Orchestrator (не блокируем GIL). ADR-008.
       '''
     }
       -> creditPlatform.graphragRuntime.inferenceServer 'Embed (gRPC)' {
@@ -59,16 +59,16 @@ views {
         Конкурентные запросы не блокируют друг друга.
       '''
     }
-      -> creditPlatform.graphragRuntime.apiGateway.retrieval 'query vector' {
+      -> creditPlatform.graphragRuntime.ragOrchestrator.retrieval 'query vector' {
       notes '**Вектор готов** — продолжаем dense- и graph-поиск.'
     }
-      -> creditPlatform.qdrant 'dense search (top-k)' {
-      notes '**Dense-список** — top-k по косинусному сходству (HNSW).'
+      -> creditPlatform.graphragRuntime.qdrant_grr 'dense search (top-k)' {
+      notes '**Dense-список** — top-k по косинусному сходству (HNSW, реплика).'
     }
-      -> creditPlatform.neo4j 'graph expand (Cypher 1-2 hop)' {
-      notes '**Graph-список** — связанные чанки через BELONGS_TO / MENTIONS / LINKED_TO.'
+      -> creditPlatform.graphragRuntime.neo4j_grr 'graph expand (Cypher 1-2 hop)' {
+      notes '**Graph-список** — связанные чанки через BELONGS_TO / MENTIONS / LINKED_TO (реплика).'
     }
-      -> creditPlatform.graphragRuntime.apiGateway.fusion 'RRF fusion' {
+      -> creditPlatform.graphragRuntime.ragOrchestrator.fusion 'RRF fusion' {
       notes '''
         **RRF — ранговое слияние**
 
@@ -77,19 +77,19 @@ views {
         Заменяет эвристику `vector + 0.5·graph`. ADR-009.
       '''
     }
-      -> creditPlatform.graphragRuntime.apiGateway.rbac 'rbac_filter' {
+      -> creditPlatform.graphragRuntime.ragOrchestrator.rbacFilter 'rbac_filter' {
       notes '''
         **RBAC-фильтрация**
 
-        Удаляем чанки, недоступные роли: allowed_roles из PostgreSQL,
-        политика через OPA. Обязательный узел графа. ADR-006.
+        Удаляем чанки, недоступные роли: allowed_roles из PostgreSQL (реплика).
+        Политика через OPA (подсистема Security). Обязательный узел графа. ADR-006.
       '''
     }
-      -> creditPlatform.graphragRuntime.apiGateway.reranker 'rerank top-N' {
+      -> creditPlatform.graphragRuntime.ragOrchestrator.reranker 'rerank top-N' {
       notes '''
         **Cross-encoder rerank**
 
-        Top-N кандидатов после RRF переранжируются cross-encoder’ом
+        Top-N кандидатов после RRF переранжируются cross-encoder'ом
         score(query, chunk) на основе глубокого внимания. ADR-009.
       '''
     }
@@ -97,11 +97,11 @@ views {
       notes '''
         **Triton: cross-encoder**
 
-        Cross-encoder инференс изолирован в Triton (GPU, gRPC). FastAPI
+        Cross-encoder инференс изолирован в Triton (GPU, gRPC). RAG Orchestrator
         не выполняет CPU-bound скоринг. ADR-008.
       '''
     }
-      -> creditPlatform.graphragRuntime.apiGateway.llmClient 'generate_answer' {
+      -> creditPlatform.graphragRuntime.ragOrchestrator.llmClient 'generate_answer' {
       notes '''
         **Подготовка промпта**
 
@@ -119,7 +119,7 @@ views {
         - генерация ответа на отдельном GPU-сервере
       '''
     }
-      -> creditPlatform.graphragRuntime.apiGateway.llmClient 'stream response' {
+      -> creditPlatform.graphragRuntime.ragOrchestrator.llmClient 'stream response' {
       notes '''
         **Стриминг ответа**
 
@@ -128,7 +128,7 @@ views {
         - retry и timeout при сбоях
       '''
     }
-      -> creditPlatform.graphragRuntime.apiGateway.guardrails 'output guardrails' {
+      -> creditPlatform.graphragRuntime.ragOrchestrator.guardrails 'output guardrails' {
       notes '''
         **Проверка выхода**
 
@@ -152,17 +152,17 @@ views {
     include
       creditAnalyst,
       creditPlatform.graphragRuntime.apiGateway.apiLayer,
-      creditPlatform.graphragRuntime.apiGateway.guardrails,
-      creditPlatform.graphragRuntime.apiGateway.retrieval,
-      creditPlatform.graphragRuntime.apiGateway.embeddingClient,
-      creditPlatform.graphragRuntime.apiGateway.fusion,
-      creditPlatform.graphragRuntime.apiGateway.rbac,
-      creditPlatform.graphragRuntime.apiGateway.reranker,
-      creditPlatform.graphragRuntime.apiGateway.llmClient,
+      creditPlatform.graphragRuntime.ragOrchestrator.guardrails,
+      creditPlatform.graphragRuntime.ragOrchestrator.retrieval,
+      creditPlatform.graphragRuntime.ragOrchestrator.embeddingClient,
+      creditPlatform.graphragRuntime.ragOrchestrator.fusion,
+      creditPlatform.graphragRuntime.ragOrchestrator.rbacFilter,
+      creditPlatform.graphragRuntime.ragOrchestrator.reranker,
+      creditPlatform.graphragRuntime.ragOrchestrator.llmClient,
       creditPlatform.graphragRuntime.inferenceServer,
       creditPlatform.graphragRuntime.vllm,
-      creditPlatform.qdrant,
-      creditPlatform.neo4j
+      creditPlatform.graphragRuntime.qdrant_grr,
+      creditPlatform.graphragRuntime.neo4j_grr
   }
 
 }

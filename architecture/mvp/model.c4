@@ -4,15 +4,15 @@ model {
 
   creditAnalyst = actor 'Кредитный аналитик' {
     description 'Сотрудник банка, анализирует кредитные риски компаний'
-    -> creditPlatform                            'использует систему'
-    -> creditPlatform.graphragRuntime.apiGateway 'HTTPS запрос'
-    -> creditPlatform.graphragRuntime.apiGateway.apiLayer 'POST /ask {query, role}'
+    -> creditPlatform                                        'использует систему'
+    -> creditPlatform.graphragRuntime.apiGateway             'HTTPS запрос'
+    -> creditPlatform.graphragRuntime.apiGateway.apiLayer    'POST /ask {query, role}'
   }
 
   complianceOfficer = actor 'Сотрудник комплаенс' {
     description 'Проверяет соответствие запросов и ответов системы'
-    -> creditPlatform                  'аудит и мониторинг'
-    -> creditPlatform.security         'просмотр audit log, политик доступа'
+    -> creditPlatform          'аудит и мониторинг'
+    -> creditPlatform.security 'просмотр audit log, политик доступа'
   }
 
   mlEngineer = actor 'ML / MLOps инженер' {
@@ -51,7 +51,7 @@ model {
       Корпоративный провайдер идентификации (Active Directory / OIDC).
       Источник пользователей и ролей для RBAC платформы.
     '
-    -[async]-> creditPlatform.security.opa 'роли пользователей (OIDC)'
+    -[async]-> creditPlatform.security 'роли пользователей (OIDC)'
   }
 
   // ─── AI-платформа кредитного анализа ─────────────────────────────────────────
@@ -74,12 +74,14 @@ model {
         FastAPI строго I/O-bound; тяжёлый инференс изолирован в vLLM и Triton.
       '
 
+      -> creditPlatform.security 'RBAC policy evaluation (OPA) + audit events'
+
       apiGateway = container 'FastAPI Backend (API Gateway)' {
-        technology 'Python 3.11, FastAPI, uvicorn, gRPC client'
+        technology 'Python 3.11, FastAPI, uvicorn'
         description '
-          REST API + LangGraph оркестратор. Строго I/O-bound, без локального инференса.
-          Deployment: K8s ns credit-ai-app, Ingress/mTLS через bank ingress controller.
-          ADR-008, ADR-011.
+          HTTP-транспорт: принимает REST-запросы, маршрутизирует в RAG Orchestrator.
+          Строго I/O-bound, без бизнес-логики пайплайна.
+          Ingress/mTLS через bank ingress controller. ADR-008, ADR-011.
         '
         icon tech:python
 
@@ -89,84 +91,84 @@ model {
             POST /ask — {query, role} → {answer, citations, trace_id, blocked}.
             GET /health · GET /metrics.
           '
-          -> langGraph 'invoke(state)'
+          -> creditPlatform.graphragRuntime.ragOrchestrator 'invoke pipeline(state)'
         }
+      }
 
-        langGraph = component 'LangGraph Workflow' {
-          technology 'LangGraph'
-          description '
-            StateGraph оркестратор:
-            input_guardrails → vector_retrieve → graph_expand
-            → rrf_fusion → rbac_filter → rerank → generate_answer
-            → output_guardrails.
-            Трассировка через OpenTelemetry. ADR-005.
-          '
-          -> guardrails    'проверка входа / выхода'
-          -> retrieval     'hybrid retrieval (dense + graph)'
-          -> fusion        'RRF rank fusion'
-          -> rbac          'rbac_filter'
-          -> reranker      'cross-encoder rerank'
-          -> llmClient     'generate_answer'
-        }
+      ragOrchestrator = container 'RAG Pipeline Orchestrator' {
+        technology 'Python 3.11, LangGraph'
+        description '
+          Ядро RAG: владеет LangGraph StateGraph-пайплайном.
+          Оркестрирует шаги: guardrails → retrieval → RRF fusion
+          → RBAC filter → rerank → generate → output guardrails.
+          I/O-bound, без локального ML-инференса. ADR-005, ADR-008.
+        '
 
         guardrails = component 'Guardrails' {
           technology 'Python + LLM-guard'
           description '
+            Шаг 1 (input) и шаг 7 (output).
             Input: prompt injection, PII detection, стоп-паттерны.
             Output: валидация citations, галлюцинации.
           '
         }
 
-        retrieval = component 'Retrieval' {
+        retrieval = component 'Hybrid Retrieval' {
           technology 'Qdrant + Neo4j Cypher'
           description '
-            Гибридный поиск:
-            - dense (Qdrant, top-k) — ранжированный список;
-            - graph expand (Neo4j Cypher, 1-2 hop) — ранжированный список.
+            Шаг 2. Гибридный поиск:
+            - dense (Qdrant реплика, top-k) — ранжированный список;
+            - graph expand (Neo4j реплика, Cypher 1-2 hop) — ранжированный список.
             Возвращает два независимых ранжированных списка для RRF.
           '
-          -> embeddingClient            'encode query (gRPC)'
-          -> creditPlatform.qdrant      'dense vector search'
-          -> creditPlatform.neo4j       'Cypher graph expand'
-          -> fusion                     'dense list + graph list'
+          -> embeddingClient                              'encode query (gRPC)'
+          -> creditPlatform.graphragRuntime.qdrant_grr    'dense vector search'
+          -> creditPlatform.graphragRuntime.neo4j_grr     'Cypher graph expand'
+          -> fusion                                       'dense list + graph list'
         }
 
         fusion = component 'RRF Fusion' {
           technology 'Reciprocal Rank Fusion (k≈60)'
           description '
-            Ранговое слияние dense- и graph-списков по позициям:
+            Шаг 3. Ранговое слияние dense- и graph-списков по позициям:
             score = Σ 1/(k + rank_i).
-            Нивелирует разницу шкал (cosine vs дискретный graph-score),
-            заменяет эвристику vector + 0.5·graph. ADR-009.
+            Нивелирует разницу шкал (cosine vs дискретный graph-score). ADR-009.
           '
         }
 
-        rbac = component 'RBAC Filter' {
-          technology 'PostgreSQL + OPA'
+        rbacFilter = component 'RBAC Filter' {
+          technology 'PostgreSQL (replica) + OPA'
           description '
-            Chunk-level RBAC: allowed_roles из PostgreSQL,
-            политики через Open Policy Agent (подсистема Security).
-            ADR-006.
+            Шаг 4. Chunk-level RBAC: allowed_roles из PostgreSQL-реплики.
+            Политики через Open Policy Agent (подсистема Security). ADR-006.
           '
-          -> creditPlatform.postgres        'check allowed_roles'
-          -> creditPlatform.security.opa    'evaluate policy'
+          -> creditPlatform.graphragRuntime.postgres_grr 'check allowed_roles'
         }
 
         reranker = component 'Reranker' {
           technology 'Cross-Encoder (через Triton, gRPC)'
           description '
-            Cross-encoder rerank top-N: score(query, chunk) на основе
+            Шаг 5. Cross-encoder rerank top-N: score(query, chunk) на основе
             глубокого внимания. Финальный порядок контекста перед генерацией.
             Инференс изолирован в Triton. ADR-008, ADR-009.
           '
           -> rerankClient 'rerank pairs (gRPC)'
         }
 
+        llmClient = component 'LLM Client' {
+          technology 'OpenAI-compatible API (vLLM)'
+          description '
+            Шаг 6. Клиент к self-hosted Qwen через vLLM OpenAI API.
+            Streaming, retry, timeout. ADR-003, ADR-007.
+          '
+          -> creditPlatform.graphragRuntime.vllm 'POST /v1/chat/completions'
+        }
+
         embeddingClient = component 'Embedding Client' {
           technology 'gRPC client'
           description '
             Тонкий gRPC-клиент к Triton: encode(query) → dense-вектор.
-            Не загружает PyTorch-веса в процесс FastAPI. ADR-008.
+            Не загружает PyTorch-веса в процесс оркестратора. ADR-008.
           '
           -[grpc]-> creditPlatform.graphragRuntime.inferenceServer 'Embed (gRPC)'
         }
@@ -175,19 +177,9 @@ model {
           technology 'gRPC client'
           description '
             Тонкий gRPC-клиент к Triton: score(query, chunk) cross-encoder.
-            Инференс вне процесса FastAPI. ADR-008.
+            Инференс вне процесса оркестратора. ADR-008.
           '
           -[grpc]-> creditPlatform.graphragRuntime.inferenceServer 'Rerank (gRPC)'
-        }
-
-        llmClient = component 'LLM Client' {
-          technology 'OpenAI-compatible API (vLLM)'
-          description '
-            Клиент к self-hosted Qwen через vLLM OpenAI API.
-            Streaming, retry, timeout.
-            ADR-003, ADR-007.
-          '
-          -> creditPlatform.graphragRuntime.vllm 'POST /v1/chat/completions'
         }
       }
 
@@ -207,6 +199,31 @@ model {
           Deployment: K8s ns credit-ai-gpu, GPU node pool. ADR-008, ADR-011.
         '
       }
+
+      postgres_grr = database 'PostgreSQL (replica)' {
+        technology 'PostgreSQL 16, streaming replica'
+        description '
+          Реплика: chunk metadata, RBAC (allowed_roles).
+          VM-hosted, только чтение в online-контуре. ADR-011.
+        '
+        icon tech:postgresql
+      }
+
+      qdrant_grr = database 'Qdrant Cluster (replica)' {
+        technology 'Qdrant, HNSW'
+        description '
+          Реплика векторной БД (dim=768+, HNSW cosine).
+          VM-hosted, только чтение в online-контуре. ADR-004, ADR-011.
+        '
+      }
+
+      neo4j_grr = database 'Neo4j Cluster (replica)' {
+        technology 'Neo4j 5.x, Cypher'
+        description '
+          Реплика графового хранилища (Chunk, Document, Company, Risk, Law).
+          VM-hosted, только чтение в online-контуре. ADR-007, ADR-011.
+        '
+      }
     }
 
     // ═══ Подсистема 2: Knowledge Ingestion Pipeline ═══════════════════════════
@@ -218,16 +235,19 @@ model {
         Отделён от online-runtime по нагрузке, релизам и ответственности.
       '
 
+      -> creditPlatform.graphragRuntime 'batch embeddings (gRPC, Triton)'
+      -[async]-> creditPlatform.graphragRuntime 'DB replication (postgres_i→grr, qdrant_i→grr, neo4j_i→grr)'
+
       etlOrchestrator = container 'Airflow / ETL Worker' {
         technology 'Python, Apache Airflow'
         description '
           DAG индексации нормативного корпуса и финансовой отчётности.
           Deployment: K8s ns credit-ai-ingestion. ADR-011.
         '
-        -> creditPlatform.minio       'download source documents'
-        -[async]-> legalCorpus        'fetch normative documents'
-        -[async]-> financialSources   'fetch financial reports'
-        -> docParsers                 'parse documents'
+        -> minio_i              'download source documents'
+        -[async]-> legalCorpus  'fetch normative documents'
+        -[async]-> financialSources 'fetch financial reports'
+        -> docParsers           'parse documents'
       }
 
       docParsers = container 'Document Parsers' {
@@ -247,11 +267,10 @@ model {
         technology 'gRPC client → Triton'
         description '
           Пакетная векторизация чанков через Triton (GPU, динамический батчинг).
-          Без локальной загрузки модели. ADR-008.
+          Без локальной загрузки модели. Инференс — через подсистему graphragRuntime. ADR-008.
         '
-        -[grpc]-> creditPlatform.graphragRuntime.inferenceServer 'Embed batch (gRPC)'
-        -> creditPlatform.qdrant   'upsert vectors'
-        -> creditPlatform.postgres 'upsert chunk metadata + RBAC'
+        -> qdrant_i   'upsert vectors'
+        -> postgres_i 'upsert chunk metadata + RBAC'
       }
 
       graphEnrichment = container 'Graph Enrichment' {
@@ -260,7 +279,39 @@ model {
           Построение узлов/рёбер графа знаний:
           Chunk, Document, Company, Risk, Law; BELONGS_TO, MENTIONS, LINKED_TO.
         '
-        -> creditPlatform.neo4j 'upsert nodes/edges'
+        -> neo4j_i 'upsert nodes/edges'
+      }
+
+      postgres_i = database 'PostgreSQL (primary)' {
+        technology 'PostgreSQL 16'
+        description '
+          Источник: chunk metadata, RBAC (allowed_roles), финансовые данные.
+          Строится ingestion, реплицируется в graphragRuntime. VM-hosted. ADR-011.
+        '
+        icon tech:postgresql
+      }
+
+      qdrant_i = database 'Qdrant Cluster (primary)' {
+        technology 'Qdrant, HNSW'
+        description '
+          Источник: векторная БД (dim=768+, HNSW cosine).
+          Заполняется batch embeddings job. VM-hosted. ADR-004, ADR-011.
+        '
+      }
+
+      neo4j_i = database 'Neo4j Cluster (primary)' {
+        technology 'Neo4j 5.x, Cypher'
+        description '
+          Источник: граф знаний (Chunk, Document, Company, Risk, Law).
+          Строится graph enrichment. VM-hosted. ADR-007, ADR-011.
+        '
+      }
+
+      minio_i = container 'MinIO' {
+        technology 'MinIO S3-compatible'
+        description '
+          Raw zone: исходные PDF/DOCX. VM-hosted object storage, вне product K8s. ADR-011.
+        '
       }
     }
 
@@ -272,15 +323,15 @@ model {
         прогоны, реестр моделей и промптов, gate перед релизом.
       '
 
+      -> creditPlatform.graphragRuntime 'evaluation query replay'
+      -> deliveryPlatform               'promote model version'
+
       evalRunner = container 'Evaluation Runner' {
         technology 'RAGAS, DeepEval, promptfoo'
         description '
           Прогоны качества: faithfulness, context recall, grounding, формат,
           безопасность, latency. Сравнение baseline / new version.
         '
-        -> goldenSet                                        'load golden set'
-        -> creditPlatform.graphragRuntime.apiGateway        'replay queries'
-        -> mlflow                                           'log metrics'
       }
 
       goldenSet = container 'Golden Set' {
@@ -294,7 +345,6 @@ model {
           Версии LLM / embeddings / reranker, метрики экспериментов,
           статусы Staging / Production / Archived, model cards.
         '
-        -> deliveryPlatform 'promote model version'
       }
 
       promptRegistry = container 'Prompt Registry' {
@@ -308,7 +358,7 @@ model {
     security = subsystem 'Security & Access Control' {
       description '
         Сквозная подсистема безопасности: секреты, политики доступа, аудит.
-        Часть логики используется RBAC Filter и Guardrails рантайма.
+        Принимает события аудита от graphragRuntime и роли от корпоративной IAM.
       '
 
       vault = container 'HashiCorp Vault' {
@@ -327,8 +377,16 @@ model {
 
       auditLog = container 'Audit Log' {
         technology 'PostgreSQL + append-only store'
-        description 'Аудиторский след запросов и решений RBAC по trace_id.'
-        -> creditPlatform.postgres 'persist audit records'
+        description 'Аудиторский след запросов и решений RBAC по trace_id. Принимает события от graphragRuntime.'
+      }
+
+      postgres_s = database 'PostgreSQL (audit)' {
+        technology 'PostgreSQL 16, append-only'
+        description '
+          Хранилище аудиторского следа (append-only).
+          Доступ только для security.auditLog. VM-hosted. ADR-011.
+        '
+        icon tech:postgresql
       }
     }
 
@@ -340,11 +398,12 @@ model {
         Эксплуатационная зрелость платформы.
       '
 
+      -[async]-> creditPlatform.ingestion 'backup primary databases (postgres_i, qdrant_i, neo4j_i)'
+      -[async]-> creditPlatform.security  'backup audit DB (postgres_s)'
+
       otelCollector = container 'OTel Collector' {
         technology 'OpenTelemetry Collector'
         description 'Агрегирует трейсы, метрики, логи. K8s ns credit-ai-observability. ADR-007, ADR-011.'
-        -> jaeger     'export traces'
-        -> prometheus 'export metrics'
       }
 
       jaeger = container 'Jaeger' {
@@ -358,7 +417,6 @@ model {
       prometheus = container 'Prometheus + Grafana' {
         technology 'Prometheus, Grafana'
         description 'Метрики: latency, throughput, GPU utilization, error rate.'
-        -> alertmanager 'fire alerts'
       }
 
       alertmanager = container 'Alertmanager' {
@@ -369,50 +427,12 @@ model {
       backupScheduler = container 'Backup Scheduler' {
         technology 'CronJob / Velero'
         description 'Регулярные бэкапы VM-хранилищ. K8s ns credit-ai-observability (Velero/CronJob). ADR-011.'
-        -> backupStorage           'store snapshots'
-        -[async]-> creditPlatform.postgres 'backup'
-        -[async]-> creditPlatform.qdrant   'backup'
-        -[async]-> creditPlatform.neo4j    'backup'
       }
 
       backupStorage = container 'Backup Storage' {
         technology 'Object storage (offsite)'
         description 'Offsite снимки для DR. VM / object storage, вне product K8s. ADR-011.'
       }
-    }
-
-    // ═══ Общие хранилища платформы ════════════════════════════════════════════
-
-    qdrant = database 'Qdrant Cluster' {
-      technology 'Qdrant, HNSW'
-      description '
-        Векторная БД (dim=768+, HNSW cosine). VM-hosted, вне product K8s.
-        ADR-004, ADR-007, ADR-011.
-      '
-    }
-
-    neo4j = database 'Neo4j Cluster' {
-      technology 'Neo4j 5.x, Cypher'
-      description '
-        Графовое хранилище (Chunk, Document, Company, Risk, Law).
-        VM-hosted cluster, вне product K8s. ADR-007, ADR-011.
-      '
-    }
-
-    postgres = database 'PostgreSQL' {
-      technology 'PostgreSQL 16'
-      description '
-        Chunk metadata, RBAC (allowed_roles), audit log.
-        VM-hosted, managed by bank DBA, вне product K8s. ADR-011.
-      '
-      icon tech:postgresql
-    }
-
-    minio = container 'MinIO' {
-      technology 'MinIO S3-compatible'
-      description '
-        Raw zone: исходные PDF/DOCX. VM-hosted object storage, вне product K8s. ADR-011.
-      '
     }
 
   }
@@ -433,8 +453,8 @@ model {
     ciRunner = container 'CI Runner' {
       technology 'GitHub Actions / GitLab CI'
       description 'Unit / integration / security tests + GenAI quality gates.'
-      -> gitRepo            'checkout'
-      -> containerRegistry  'push images'
+      -> gitRepo           'checkout'
+      -> containerRegistry 'push images'
     }
 
     containerRegistry = container 'Container Registry' {
@@ -482,8 +502,8 @@ model {
     asIsBuilder = container 'As-Is Builder' {
       technology 'OTel trace importer'
       description 'Строит as-is модель из трейсов и сравнивает с to-be.'
-      -[async]-> creditPlatform.observability.jaeger 'import traces'
-      -> archRepo                                    'compare as-is / to-be'
+      -[async]-> creditPlatform.observability 'import traces'
+      -> archRepo                             'compare as-is / to-be'
     }
   }
 

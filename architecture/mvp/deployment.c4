@@ -13,8 +13,9 @@ deployment {
       '
 
       nsApp = zone 'ns: credit-ai-app' {
-        description 'Online runtime: FastAPI, OPA, Vault Agent. Ingress/mTLS через bank ingress.'
+        description 'Online runtime: FastAPI Gateway, RAG Orchestrator, OPA, Vault Agent. Ingress/mTLS через bank ingress.'
         instanceOf creditPlatform.graphragRuntime.apiGateway
+        instanceOf creditPlatform.graphragRuntime.ragOrchestrator
         instanceOf creditPlatform.security.opa
         instanceOf creditPlatform.security.vault
       }
@@ -47,19 +48,27 @@ deployment {
     dataVms = vmHost 'Data VMs (stateful)' {
       description '
         VM-hosted хранилища вне product K8s. Bank infra / DBA.
-        Подключение из pod''ов по internal network.
+        Подключение из K8s pods по internal network.
       '
 
-      dbTier = zone 'DB Tier (VM)' {
-        description 'PostgreSQL, Neo4j, Qdrant — managed на VM.'
-        instanceOf creditPlatform.postgres
-        instanceOf creditPlatform.neo4j
-        instanceOf creditPlatform.qdrant
+      dbTierPrimary = zone 'DB Tier Primary (VM)' {
+        description 'Первичные БД ingestion: PostgreSQL, Neo4j, Qdrant. Audit PostgreSQL (security).'
+        instanceOf creditPlatform.ingestion.postgres_i
+        instanceOf creditPlatform.ingestion.neo4j_i
+        instanceOf creditPlatform.ingestion.qdrant_i
+        instanceOf creditPlatform.security.postgres_s
+      }
+
+      dbTierReplica = zone 'DB Tier Replica (VM)' {
+        description 'Реплики для online-runtime graphragRuntime: PostgreSQL, Neo4j, Qdrant. Только чтение.'
+        instanceOf creditPlatform.graphragRuntime.postgres_grr
+        instanceOf creditPlatform.graphragRuntime.neo4j_grr
+        instanceOf creditPlatform.graphragRuntime.qdrant_grr
       }
 
       objectStorage = zone 'Object Storage (VM)' {
-        description 'MinIO raw zone, offsite backup storage.'
-        instanceOf creditPlatform.minio
+        description 'MinIO raw zone (ingestion), offsite backup storage.'
+        instanceOf creditPlatform.ingestion.minio_i
         instanceOf creditPlatform.observability.backupStorage
       }
     }
@@ -74,8 +83,10 @@ views {
     title 'MVP: Deployment — K8s + Data VMs'
     description '
       Deployment MVP (ADR-011):
-      Product Kubernetes (namespaces: app, gpu, ingestion, observability)
-      + Data VMs (PostgreSQL, Neo4j, Qdrant, MinIO, backup storage).
+      Product Kubernetes (namespaces: app+rag, gpu, ingestion, observability)
+      + Data VMs (Primary: PostgreSQL/Neo4j/Qdrant ingestion + audit;
+                  Replica: PostgreSQL/Neo4j/Qdrant graphragRuntime;
+                  Object: MinIO + backup).
       Один K8s-кластер; GPU — node pool; CI/CD — внешняя deliveryPlatform.
     '
     includeAncestors: true
